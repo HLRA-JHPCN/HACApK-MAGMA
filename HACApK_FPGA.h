@@ -8,7 +8,7 @@ typedef struct stc_HACApK_leafmtx {
   double *a2;
 } stc_HACApK_leafmtx;
 
-#ifdef HAVE_MAGMA
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 #include "magma_v2.h"
 #endif
 
@@ -18,7 +18,7 @@ typedef struct stc_HACApK_leafmtxp {
   int nlfkt;
   int ktmax;
   int st_lf_stride; //
-#ifdef HAVE_MAGMA
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
   // GPU memory
   int m;         // matrix dimension
   int n;         // matrix dimension
@@ -28,6 +28,19 @@ typedef struct stc_HACApK_leafmtxp {
   magmaDouble_ptr zu_gpu;
   magmaDouble_ptr *zau_gpu;
   magmaDouble_ptr *zbu_gpu; 
+
+  // for batch
+  int num_batch; // number of batch
+  double **d_A_array;
+  double **d_X_array;
+  double **d_Y_array;
+  magma_int_t *d_M, *d_N;
+  magma_int_t *d_inc;
+  // 
+  double **h_A_array;
+  double **h_X_array;
+  double **h_Y_array;
+  magma_int_t *h_M, *h_N;
 #endif
   //
   stc_HACApK_leafmtx *st_lf;

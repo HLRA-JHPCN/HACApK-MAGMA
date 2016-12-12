@@ -76,7 +76,7 @@ module m_HACApK_base
     integer(c_int) ktmax
     integer(c_int) st_lf_stride !!!
 !
-#ifdef HAVE_MAGMA
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 !    integer*4 m
 !    integer*4 n
 !    integer*4 max_block
@@ -93,6 +93,20 @@ module m_HACApK_base
     type(c_ptr) :: zu_gpu
     type(c_ptr) :: zau_gpu
     type(c_ptr) :: zbu_gpu
+!
+    integer(c_int) num_batch
+    type(c_ptr) :: d_A_array
+    type(c_ptr) :: d_X_array
+    type(c_ptr) :: d_Y_array
+    type(c_ptr) :: d_M
+    type(c_ptr) :: d_N
+    type(c_ptr) :: d_inc
+!
+    type(c_ptr) :: h_A_array
+    type(c_ptr) :: h_X_array
+    type(c_ptr) :: h_Y_array
+    type(c_ptr) :: h_M
+    type(c_ptr) :: h_N
 #endif
 !
     type(st_HACApK_leafmtx),pointer :: st_lf(:)=>null()

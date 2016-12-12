@@ -78,15 +78,18 @@ LIBS+= $(MPI_DIR)/lib/libmpi_mpifh.so
 #F90FLAGS+= -DHAVE_PaRSEC
 
 # MAGMA
-#CUDA_DIR  = /opt/cuda/7.5
-#MAGMA_DIR = /home/yamazaki/magma/bitbuckets/magma
+CUDA_DIR  = /opt/cuda/7.5
+MAGMA_DIR = /home/yamazaki/magma/bitbuckets/magma
 
-#INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
+INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
 
-#LIBS+= -L$(CUDA_DIR)/lib64 -lcublas -lcusparse -lcudart $(MAGMA_DIR)/lib/libmagma.a
+LIBS+= -L$(CUDA_DIR)/lib64 -lcublas -lcusparse -lcudart $(MAGMA_DIR)/lib/libmagma.a
 
-#CCFLAGS += -DHAVE_MAGMA 
-#F90FLAGS+= -DHAVE_MAGMA
+CCFLAGS += -DHAVE_MAGMA 
+F90FLAGS+= -DHAVE_MAGMA
+
+CCFLAGS += -DHAVE_MAGMA_BATCH
+F90FLAGS+= -DHAVE_MAGMA_BATCH
 
 
 TARGET=bem-bb-SCM.out

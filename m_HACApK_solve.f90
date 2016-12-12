@@ -637,7 +637,6 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
 !   >> C function <<
    u(:)=1.0; b(:)=1.0
    call c_HACApK_adot_body_lfmtx(u,st_leafmtxp,b,wws)
-   print*,'c_HACApK_adot_body_lfmtx end'
 !
 #ifdef HAVE_MAGMA
    v(:)=1.0; b(:)=1.0
@@ -657,6 +656,25 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
    write(*,*) 'error(CPU-GPU)',sqrt(enorm),sqrt(enorm)/sqrt(unorm)
    write(*,*)
 #endif 
+!
+#ifdef HAVE_MAGMA_BATCH
+   v(:)=1.0; b(:)=1.0
+   call c_HACApK_adot_body_lfcpy_batch(st_leafmtxp)
+   call c_HACApK_adot_body_lfmtx_batch(v,st_leafmtxp,b,wws)
+   call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
+   unorm = 0.0
+   do ii=1,nd
+       unorm = unorm + u(ii)*u(ii)
+   enddo
+   v = u - v
+   enorm = 0.0
+   do ii=1,nd
+       enorm = enorm + v(ii)*v(ii)
+   enddo
+   write(*,*)
+   write(*,*) 'error(CPU-GPU)',sqrt(enorm),sqrt(enorm)/sqrt(unorm)
+   write(*,*)
+#endif
 !
 #ifdef HAVE_PaRSEC
    call c_HACApK_PaRSEC(1,1,u,st_leafmtxp,b,wws)
