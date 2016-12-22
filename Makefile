@@ -37,6 +37,8 @@ CCFLAGS = $(OPTFLAGS)
 F90FLAGS = $(OPTFLAGS)
 endif
 
+#CCFLAGS += -g
+#F90FLAGS += -g
 LINK=$(F90)
 
 #CC  = icc
@@ -77,8 +79,9 @@ LIBS+= $(MPI_DIR)/lib/libmpi_mpifh.so
 #CCFLAGS += -DHAVE_PaRSEC
 #F90FLAGS+= -DHAVE_PaRSEC
 
+
 # MAGMA
-CUDA_DIR  = /opt/cuda/7.5
+CUDA_DIR  = /opt/cuda/8.0
 MAGMA_DIR = /home/yamazaki/magma/bitbuckets/magma
 
 INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
@@ -91,6 +94,7 @@ F90FLAGS+= -DHAVE_MAGMA
 CCFLAGS += -DHAVE_MAGMA_BATCH
 F90FLAGS+= -DHAVE_MAGMA_BATCH
 
+#CCFLAGS += -Wall -Wremarks -Wcheck
 
 TARGET=bem-bb-SCM.out
 .SUFFIXES: .o .c .f90
@@ -99,12 +103,12 @@ $(TARGET): $(OBJS)
 			$(LINK) -o $@ $(OBJS) $(LDFLAGS) $(LIBS)
 
 .c.o: *.c
-			$(CC) -g -c $(CCFLAGS) $(INCS) $<
+			$(CC) -c $(CCFLAGS) $(INCS) $<
 .cpp.o: *.c
-			$(CPP) -g -c $(CCFLAGS) $(INCS) $<
+			$(CPP) -c $(CCFLAGS) $(INCS) $<
 .f90.o: *.f90
 #			echo 'f90 complile'
-			$(F90) -g -c $< $(F90FLAGS) $(INCS)
+			$(F90) -c $< $(F90FLAGS) $(INCS)
 clean:
 	rm -f *.o *.mod $(TARGET)
 

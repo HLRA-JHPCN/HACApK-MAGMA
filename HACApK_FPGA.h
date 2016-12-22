@@ -27,20 +27,26 @@ typedef struct stc_HACApK_leafmtxp {
   magmaDouble_ptr *mtx2_gpu;
   magmaDouble_ptr zu_gpu;
   magmaDouble_ptr *zau_gpu;
+  magmaDouble_ptr *zau_pin;
   magmaDouble_ptr *zbu_gpu; 
 
   // for batch
-  int num_batch; // number of batch
+  int num_batch;    // number of batch
+  int total_size_y; // 
+  int transA;
   double **d_A_array;
   double **d_X_array;
   double **d_Y_array;
   magma_int_t *d_M, *d_N;
+  magma_int_t *d_lda;
   magma_int_t *d_inc;
   // 
+  magma_int_t *batch_order;
   double **h_A_array;
   double **h_X_array;
   double **h_Y_array;
   magma_int_t *h_M, *h_N;
+  magma_int_t *max_M, *max_N;
 #endif
   //
   stc_HACApK_leafmtx *st_lf;

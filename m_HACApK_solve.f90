@@ -659,7 +659,8 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
 !
 #ifdef HAVE_MAGMA_BATCH
    v(:)=1.0; b(:)=1.0
-   call c_HACApK_adot_body_lfcpy_batch(st_leafmtxp)
+!   call c_HACApK_adot_body_lfcpy_batch(st_leafmtxp)
+   call c_HACApK_adot_body_lfcpy_batch_sorted(st_leafmtxp)
    call c_HACApK_adot_body_lfmtx_batch(v,st_leafmtxp,b,wws)
    call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
    unorm = 0.0

@@ -92,21 +92,28 @@ module m_HACApK_base
     type(c_ptr) :: mtx2_gpu
     type(c_ptr) :: zu_gpu
     type(c_ptr) :: zau_gpu
+    type(c_ptr) :: zau_pin
     type(c_ptr) :: zbu_gpu
 !
     integer(c_int) num_batch
+    integer(c_int) total_size_y
+    integer(c_int) transA
     type(c_ptr) :: d_A_array
     type(c_ptr) :: d_X_array
     type(c_ptr) :: d_Y_array
     type(c_ptr) :: d_M
     type(c_ptr) :: d_N
+    type(c_ptr) :: d_lda
     type(c_ptr) :: d_inc
 !
+    type(c_ptr) :: batch_order
     type(c_ptr) :: h_A_array
     type(c_ptr) :: h_X_array
     type(c_ptr) :: h_Y_array
     type(c_ptr) :: h_M
     type(c_ptr) :: h_N
+    type(c_ptr) :: max_M
+    type(c_ptr) :: max_N
 #endif
 !
     type(st_HACApK_leafmtx),pointer :: st_lf(:)=>null()
@@ -159,6 +166,11 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  type(st_HACApK_lcontrol) :: st_ctl
  integer,optional :: icomma
  character*32 logfile
+#ifdef HAVE_PaRSEC
+ integer my_rank(1)  ! MPI_Comm
+ integer my_comm     ! MPI_Comm
+ integer my_group    ! MPI_Group
+#endif
  allocate(st_ctl%param(100))
  st_ctl%param(1:100)=0.0
  st_ctl%param(1) =1;        ! Print : 0:Only Error 1:STD 2:Dubug
@@ -195,8 +207,27 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  if(ierr.ne.0) then
     print*, 'Error: MPI_Comm_rank failed !!!'
  endif
+
  allocate(st_ctl%lpmd(30)); st_ctl%lpmd(:)=0
  st_ctl%lpmd(1)=icomm; st_ctl%lpmd(2)=nrank; st_ctl%lpmd(3)=irank; st_ctl%lpmd(4)=20
+#ifdef HAVE_PaRSEC
+ st_ctl%param(21)=200;       ! cluster : leaf size 15
+ if( irank .eq. 0 ) then
+   print*, ' '
+   print*, '!!! cluster leaf size is increased to 200 !!!'
+   print*, ' '
+ endif
+ my_rank(1) = irank
+ call MPI_Comm_group(MPI_COMM_WORLD, world_group, ierr);
+ call MPI_Group_incl(world_group, 1, my_rank, my_group, ierr);
+ call MPI_Comm_create(MPI_COMM_WORLD, my_group, my_comm, ierr);
+ call MPI_Group_free(world_group, ierr);
+ call MPI_Group_free(my_group, ierr);
+ st_ctl%lpmd(1)=my_comm; 
+ st_ctl%lpmd(2)=1; 
+ st_ctl%lpmd(3)=0;
+#endif
+
  nthr=1
 !$omp parallel
   nthr = omp_get_num_threads()
