@@ -25,7 +25,7 @@
 !C**************************************************************************
 !C  This file includes basic routines for H-matrices
 !C  created by Akihiro Ida at Kyoto University on May 2012
-!C  last modified by Akihiro Ida on Sep. 2014
+!C  last modified by Akihiro Ida on Dec. 2016
 !C**************************************************************************
 module m_HACApK_base
  use iso_c_binding
@@ -38,7 +38,7 @@ module m_HACApK_base
 !*** type :: st_HACApK_cluster
   type :: st_HACApK_cluster
     integer*4 ndim
-    integer*4 nstrt, nsize, ndpth, nnson, nmbr
+    integer*4 nstrt,nsize,ndpth,nnson,nmbr
     integer*4 ndscd ! number of descendants
     real*8,pointer :: bmin(:)=>null() ! Bounding box
     real*8,pointer :: bmax(:)=>null()
@@ -58,33 +58,18 @@ module m_HACApK_base
   end type st_HACApK_leafmtx
 
 !*** type :: st_HACApK_leafmtxp
-  type :: st_Double_ptr
-    real*8,pointer :: val(:)
-  end type st_Double_ptr
-
-!*** type :: st_HACApK_leafmtxp
   type :: st_HACApK_leafmtxp
-!    integer*4 nd ! number of unknowns
-!    integer*4 nlf ! number of sub-matrices
-!    integer*4 nlfkt ! number of low-rank sub matrices
-!    integer*4 ktmax
-!    integer*4 st_lf_stride !!!
-!    type(st_HACApK_leafmtx),pointer :: st_lf(:)=>null()
+!    integer*4 ltmtx  ! kind of the matrix; 1:rk 2:full
+!    integer*4 kt
+!    integer*4 nstrtl,ndl;
+!    integer*4 nstrtt,ndt;
+!    real*8,pointer :: a1(:,:)=>null(),a2(:,:)=>null()
     integer(c_int) nd ! number of unknowns
     integer(c_int) nlf ! number of sub-matrices
     integer(c_int) nlfkt ! number of low-rank sub matrices
     integer(c_int) ktmax
     integer(c_int) st_lf_stride !!!
-!
 #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
-!    integer*4 m
-!    integer*4 n
-!    integer*4 max_block
-!    type(st_Double_ptr),pointer :: mtx1_gpu(:)
-!    type(st_Double_ptr),pointer :: mtx2_gpu(:)
-!    real*8,pointer :: zu_gpu(:)
-!    real*8,pointer :: zau_gpu(:)
-!    real*8,pointer :: zbu_gpu(:)
     integer(c_int) m
     integer(c_int) n
     integer(c_int) max_block
@@ -115,7 +100,6 @@ module m_HACApK_base
     type(c_ptr) :: max_M
     type(c_ptr) :: max_N
 #endif
-!
     type(st_HACApK_leafmtx),pointer :: st_lf(:)=>null()
   end type st_HACApK_leafmtxp
 
@@ -166,11 +150,6 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  type(st_HACApK_lcontrol) :: st_ctl
  integer,optional :: icomma
  character*32 logfile
-#ifdef HAVE_PaRSEC
- integer my_rank(1)  ! MPI_Comm
- integer my_comm     ! MPI_Comm
- integer my_group    ! MPI_Group
-#endif
  allocate(st_ctl%param(100))
  st_ctl%param(1:100)=0.0
  st_ctl%param(1) =1;        ! Print : 0:Only Error 1:STD 2:Dubug
@@ -190,7 +169,7 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  st_ctl%param(83)=500;      ! solver : maximum iterative number
  st_ctl%param(85)=1;        ! solver : 1:BiCGSTAB 2:GCR(m)
  st_ctl%param(87)=8;        ! solver : number of iteration for reset
- st_ctl%param(99)=1       ! Measure the time of Ax; iterative number
+ st_ctl%param(99)=100       ! Measure the time of Ax; iterative number
  ierr=0; lrtrn=0
  if(present(icomma))then
    icomm=icomma; st_ctl%lf_umpi=1
@@ -207,35 +186,14 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  if(ierr.ne.0) then
     print*, 'Error: MPI_Comm_rank failed !!!'
  endif
-
  allocate(st_ctl%lpmd(30)); st_ctl%lpmd(:)=0
  st_ctl%lpmd(1)=icomm; st_ctl%lpmd(2)=nrank; st_ctl%lpmd(3)=irank; st_ctl%lpmd(4)=20
-#ifdef HAVE_PaRSEC
- st_ctl%param(21)=200;       ! cluster : leaf size 15
- if( irank .eq. 0 ) then
-   print*, ' '
-   print*, '!!! cluster leaf size is increased to 200 !!!'
-   print*, ' '
- endif
- my_rank(1) = irank
- call MPI_Comm_group(MPI_COMM_WORLD, world_group, ierr);
- call MPI_Group_incl(world_group, 1, my_rank, my_group, ierr);
- call MPI_Comm_create(MPI_COMM_WORLD, my_group, my_comm, ierr);
- call MPI_Group_free(world_group, ierr);
- call MPI_Group_free(my_group, ierr);
- st_ctl%lpmd(1)=my_comm; 
- st_ctl%lpmd(2)=1; 
- st_ctl%lpmd(3)=0;
-#endif
-
  nthr=1
 !$omp parallel
   nthr = omp_get_num_threads()
   if(nthr>0) st_ctl%lpmd(20)=nthr
 !$omp end parallel
- WRITE(*,*) 'nthr=omp_get_num_threads()=',nthr
- WRITE(*,*) 'st_ctl%lthr(',nthr,')'
- allocate(st_ctl%lod(nd),st_ctl%lthr(nthr),st_ctl%lnp(nrank),st_ctl%lsp(nrank),stat = ierr)
+ allocate(st_ctl%lod(nd),st_ctl%lthr(nthr+1),st_ctl%lnp(nrank),st_ctl%lsp(nrank),stat = ierr)
  
  call MPI_Barrier( icomm, ierr )
 
@@ -292,13 +250,7 @@ endfunction
  2000 format(5(a,e15.7)/)
   
  param => st_ctl%param(:)
- lpmd => st_ctl%lpmd(:); 
- lod => st_ctl%lod(:); 
-#ifdef TESTING
- lthr => st_ctl%lthr
-#else
- lthr(0:) => st_ctl%lthr
-#endif
+ lpmd => st_ctl%lpmd(:); lod => st_ctl%lod(:); lthr(0:) => st_ctl%lthr
  mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1); nthr=lpmd(20)
  nd=nofc*nffc
  allocate(lodfc(nofc),stat=ierr)
@@ -409,7 +361,7 @@ endfunction
     endif
   enddo
   deallocate(st_leafmtx)
-  call HACApK_setcutthread(lthr, st_leafmtxp, st_ctl, mem8, nthr, ktp)
+  call HACApK_setcutthread(lthr,st_leafmtxp,st_ctl,mem8,nthr,ktp)
  9999 continue
 ! stop
  end subroutine HACApK_generate_frame_leafmtx
@@ -461,29 +413,16 @@ endfunction
  end subroutine HACApK_setcutrow
 
 !***HACApK_setcutthread
- subroutine HACApK_setcutthread(lthr, st_leafmtxp, st_ctl, mem8, nthr, ktp)
+ subroutine HACApK_setcutthread(lthr,st_leafmtxp,st_ctl,mem8,nthr,ktp)
  type(st_HACApK_leafmtxp) :: st_leafmtxp
  type(st_HACApK_lcontrol) :: st_ctl
-! switched to base-1 (ichi) !
-#ifdef TESTING
- integer :: lthr(1:*)
-#else
  integer :: lthr(0:*)
-#endif
  integer*8 :: mem8,nth1_mem,imem
 
- nlf = st_leafmtxp%nlf
- nth1_mem = mem8/nthr
- if (st_ctl%param(1) > 1) then
-   print*,'HACApK_setcutthread; nlf=',nlf,' mem8=',mem8,' nthr=',nthr
- endif
-! switched to base-1 (ichi) !
-#ifdef TESTING
- lthr(1) = 1; 
-#else
- lthr(0) = 1; 
-#endif
- lthr(nthr) = nlf+1
+ nlf=st_leafmtxp%nlf
+ nth1_mem=mem8/nthr
+ if(st_ctl%param(1)>1) print*,'HACApK_setcutthread; nlf=',nlf,' mem8=',mem8,' nthr=',nthr
+ lthr(0)=1; lthr(nthr)=nlf+1
  imem=0; ith=1; kt=ktp
  do il=1,nlf
    ltmtx=st_leafmtxp%st_lf(il)%ltmtx
@@ -500,11 +439,7 @@ endfunction
      if(ith==nthr) exit
    endif
  enddo
-#ifdef TESTING
- if(st_ctl%param(1)>1) print*,'HACApK_setcutthread; lthr=',lthr(1:nthr)
-#else
  if(st_ctl%param(1)>1) print*,'HACApK_setcutthread; lthr=',lthr(0:nthr)
-#endif
  end subroutine HACApK_setcutthread
 
 !***HACApK_accuracy_leafmtx_body
@@ -686,13 +621,7 @@ endfunction
  type(st_HACApK_leafmtx) :: st_lf(:)
  type(st_HACApK_calc_entry) :: st_bemv
  real*8 ::param(:)
- integer*4 :: lodl(nd),lodt(nd),lpmd(:),lnmtx(:)
-! switched to base-1 (ichi) !
-#ifdef TESTING
- integer*4 :: lthr(1:)
-#else
- integer*4 :: lthr(0:)
-#endif
+ integer*4 :: lodl(nd),lodt(nd),lpmd(:),lnmtx(:),lthr(0:)
  real*8, allocatable :: zab(:,:),zaa(:,:)
  1000 format(5(a,i12)/)
  eps=param(71); ACA_EPS=param(72)*eps; kparam=param(63)
