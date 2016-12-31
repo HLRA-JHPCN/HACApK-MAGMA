@@ -1,0 +1,9 @@
+irank=         0, nrank=         1
+No. of cluster=        1823
+ndnr_s=         1, ndnr_e=     10400, ndnr=     10400
+ No. of nsmtx        8430       14860           0
+time_supermatrix             = 1.78079605E-02
+time_fill_hmtx               = 9.94277000E-01
+time_construction_Hmatrix    = 1.01208496E+00
+ ktmax=        23
+    H matrix memory=      150.71(Mbyte)
