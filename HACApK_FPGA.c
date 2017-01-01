@@ -64,7 +64,7 @@ void  c_hacapk_adot_body_lfmtx_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, d
 // > using MAGMA batched DGEMV, sorted (in-place)
 // /////////////////////////////////////////////////////////////////////////
 #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
-#define num_streams 5
+#define num_streams 1
 #define max(a,b) (((a) > (b) ? (a) : (b)))
 #define min(a,b) (((a) < (b) ? (a) : (b)))
 
@@ -92,8 +92,8 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
     }
 
     // copy the input vector to GPU
-    magma_dsetvector( st_leafmtxp->n,  zu, 1, st_leafmtxp->zu_gpu,  1, queue[0] );
-    magma_dsetvector( st_leafmtxp->m, zau, 1, st_leafmtxp->zau_gpu[0], 1, queue[0] );
+    magma_dsetvector( st_leafmtxp->gn,  zu, 1, st_leafmtxp->zu_gpu,  1, queue[0] );
+    magma_dsetvector( st_leafmtxp->m,  zau, 1, st_leafmtxp->zau_gpu[0], 1, queue[0] );
     for (ip = 1; ip < num_streams; ip++) {
         magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero, 
                           st_leafmtxp->zau_gpu[ip], st_leafmtxp->m, queue[ip] );
@@ -122,7 +122,6 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
             /**/
             kt=sttmp->kt; // rank
             // zbu := V'*zu
-            #define CPU
             #if defined(GPU)
             magmablas_dgemv(MagmaTrans, ndt, kt, 
                             one,  st_leafmtxp->mtx1_gpu[ip], ndt, 
@@ -199,19 +198,25 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
                      queue[0] );
     }
     // synch to get time
+    MPI_Barrier(MPI_COMM_WORLD);
     magma_queue_sync( queue[0] );
-    printf( " time_gpu: %.2e seconds\n\n",MPI_Wtime()-tic );
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( " time_gpu: %.2e seconds\n\n",MPI_Wtime()-tic );
+    }
     // copy back
     magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue[0] );
     magma_queue_destroy( queue[0] );
     #else
-    printf( " time_cpu: %.2e seconds\n\n",MPI_Wtime()-tic );
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( " time_cpu: %.2e seconds\n\n",MPI_Wtime()-tic );
+    }
     #endif
 }
 
 /////////////////////////////////////////////////////
 // copy blocks to GPU
-void  c_hacapk_adot_body_lfcpy_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
+void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
     #define GPU
     #if defined(GPU)
     // local variables
@@ -221,7 +226,9 @@ void  c_hacapk_adot_body_lfcpy_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
 
     // let me initialize here for now..
     magma_init();
-    magma_print_environment();
+    //st_leafmtxp->mpi_comm = MPI_COMM_WORLD; // comm world for now
+    MPI_Comm_rank(MPI_COMM_WORLD, &(st_leafmtxp->mpi_rank));
+    if (st_leafmtxp->mpi_rank == 0) magma_print_environment();
 
     // allocate queue
     magma_device_t cdev;
@@ -233,6 +240,7 @@ void  c_hacapk_adot_body_lfcpy_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
     nlf = st_leafmtxp->nlf; 
 
     // initialize data structure
+    st_leafmtxp->gn = *nd;
     st_leafmtxp->m = 0;
     st_leafmtxp->n = 0;
     st_leafmtxp->max_block = 0;
@@ -315,14 +323,15 @@ void  c_hacapk_adot_body_lfcpy_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
         }
     }
     if (st_leafmtxp->n > 0) {
-        int retval = magma_malloc( (void**) &st_leafmtxp->zu_gpu, (st_leafmtxp->n)*sizeof(double) );
+        int retval = magma_malloc( (void**) &st_leafmtxp->zu_gpu, (st_leafmtxp->gn)*sizeof(double) );
         if ( MAGMA_SUCCESS != retval ) {
             fprintf( stderr, "!!!! magma_malloc failed for zu_gpu\n");
             exit(0);
         }
     }
-    printf( " %d-by-%d matrix (# blocks=%d)\n",st_leafmtxp->m,st_leafmtxp->n,nlf );
-
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( " %d-by-%d matrix (# blocks=%d)\n",st_leafmtxp->m,st_leafmtxp->n,nlf );
+    }
     magma_queue_destroy( queue );
     #endif
 }
@@ -376,6 +385,7 @@ void  c_hacapk_adot_body_lfdel_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
 #define MAGMA_BATCH_DGEMV_ATOMIC
 #define BATCH_IN_PLACE_Y // this is needed with c_hacapk_adot_body_lfcpy_batch_sorted_
 #define SORT_BATCH_BY_SIZES
+#define gpus_per_proc 3
 
 void magma_iprint( magma_int_t m, magma_int_t n,
                    magma_int_t *A, magma_int_t lda ) {
@@ -398,6 +408,11 @@ void magma_iprint_gpu( magma_int_t m, magma_int_t n,
     magma_free_cpu( A );
 }
 
+    
+static int get_device_id(stc_HACApK_leafmtxp *st_leafmtxp) {
+    return (st_leafmtxp->mpi_rank)%gpus_per_proc;
+}
+
 
 /////////////////////////////////////////////////////
 // MatVec with batched GEMV
@@ -414,7 +429,6 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     double zero = 0.0;
 
     int ip;
-
     int num_saved = 0, count = 0;
     int nlf = st_leafmtxp->nlf;
     int *saved_ip[2]; 
@@ -435,11 +449,14 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     #else
     magma_dsetvector( st_leafmtxp->m, zau, 1, st_leafmtxp->zau_gpu[0], 1, queue );
     #endif
-    magma_dsetvector( st_leafmtxp->n,  zu, 1, st_leafmtxp->zu_gpu,  1, queue );
+    magma_dsetvector( st_leafmtxp->gn,  zu, 1, st_leafmtxp->zu_gpu,  1, queue );
+
+    // start timer
+    MPI_Barrier(MPI_COMM_WORLD);
+    double tic = MPI_Wtime();
 
     // parse all the blocks
     int num_batch = 0;
-    double tic = MPI_Wtime();
     #if defined(BATCH_IN_PLACE_Y)
     // first part of low-rank, zbu := V'*zu
     magmablas_dlaset( MagmaFull, st_leafmtxp->total_size_y, 1, zero, zero, 
@@ -466,16 +483,21 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
                                              zau_batch, zau, queue);
         #endif
 
-        printf( " batchCount = %d\n",batchCount );
+        if (st_leafmtxp->mpi_rank == 0) printf( " batchCount = %d\n",batchCount );
         num_batch +=(1+ batchCount);
         count ++;
+    }
+    // stop timer
+    magma_queue_sync( queue );
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( " time_batch: %.2e seconds\n\n",MPI_Wtime()-tic );
     }
     #if defined(ACCUME_ON_CPU)
     magma_free_pinned(zau_batch);
     #else
     magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue );
     #endif
-    printf( " time_batch: %.2e seconds\n\n",MPI_Wtime()-tic );
     fflush(stdout);
 
     free(saved_ip[0]);
@@ -684,12 +706,14 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
 
     // let me initialize here for now..
     magma_init();
-    magma_print_environment();
+    //st_leafmtxp->mpi_comm = MPI_COMM_WORLD; // comm world for now
+    MPI_Comm_rank(MPI_COMM_WORLD, &(st_leafmtxp->mpi_rank));
+    if (st_leafmtxp->mpi_rank == 0) magma_print_environment();
 
     // allocate queue
     magma_device_t cdev;
     magma_queue_t queue = NULL;
-magma_setdevice( 1 );
+    magma_setdevice( get_device_id(st_leafmtxp) );
     magma_getdevice( &cdev );
     magma_queue_create( cdev, &queue );
 
@@ -758,8 +782,10 @@ magma_setdevice( 1 );
         }
     }
     fflush(stdout);
-    printf( " %d-by-%d matrix (# blocks=%d)\n",st_leafmtxp->m,st_leafmtxp->n,nlf );
-    printf( "  total_size_y=%d, total_size_a=%d\n",total_size_y,total_size_a );
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( " %d-by-%d matrix (# blocks=%d)\n",st_leafmtxp->m,st_leafmtxp->n,nlf );
+        printf( "  total_size_y=%d, total_size_a=%d\n",total_size_y,total_size_a );
+    }
     fflush(stdout);
 
     // workspace for GEMV on GPU
@@ -1055,7 +1081,7 @@ int hacapk_size_sorter(const void* arg1,const void* arg2) {
 }
 #endif
 
-void  c_hacapk_adot_body_lfcpy_batch_sorted_(stc_HACApK_leafmtxp *st_leafmtxp) {
+void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
 
     // local variables
     int ip, i, j, k;
@@ -1064,12 +1090,14 @@ void  c_hacapk_adot_body_lfcpy_batch_sorted_(stc_HACApK_leafmtxp *st_leafmtxp) {
 
     // let me initialize here for now..
     magma_init();
-    magma_print_environment();
+    //st_leafmtxp->mpi_comm = MPI_COMM_WORLD; // comm world for now
+    MPI_Comm_rank(MPI_COMM_WORLD, &(st_leafmtxp->mpi_rank));
+    if (st_leafmtxp->mpi_rank == 0) magma_print_environment();
 
     // allocate queue
     magma_device_t cdev;
     magma_queue_t queue = NULL;
-magma_setdevice( 1 );
+    magma_setdevice( get_device_id(st_leafmtxp) );
     magma_getdevice( &cdev );
     magma_queue_create( cdev, &queue );
 
@@ -1079,6 +1107,7 @@ magma_setdevice( 1 );
     saved_sz = (int*)malloc( nlf * sizeof(int) ); 
 
     // initialize data structure
+    st_leafmtxp->gn = *nd;
     st_leafmtxp->m = 0;
     st_leafmtxp->n = 0;
     st_leafmtxp->max_block = 0;
@@ -1136,12 +1165,14 @@ magma_setdevice( 1 );
         }
     }
     fflush(stdout);
-    printf( " %d-by-%d matrix (# blocks=%d)\n",st_leafmtxp->m,st_leafmtxp->n,nlf );
-    printf( "  total_size_y=%d, total_size_a=%d\n",total_size_y,total_size_a );
-    if (st_leafmtxp->transA == MagmaTrans) {
-        printf( "  > batched GEMV with Transposes\n" );
-    } else {
-        printf( "  > batched GEMV with Non Transposes\n" );
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( " %d-by-%d matrix (# blocks=%d)\n",st_leafmtxp->m,st_leafmtxp->n,nlf );
+        printf( "  total_size_y=%d, total_size_a=%d\n",total_size_y,total_size_a );
+        if (st_leafmtxp->transA == MagmaTrans) {
+            printf( "  > batched GEMV with Transposes\n" );
+        } else {
+            printf( "  > batched GEMV with Non Transposes\n" );
+        }
     }
     fflush(stdout);
 
@@ -1158,7 +1189,7 @@ magma_setdevice( 1 );
         }
     }
     if (st_leafmtxp->n > 0) {
-        int retval = magma_malloc( (void**) &st_leafmtxp->zu_gpu, (st_leafmtxp->n)*sizeof(double) );
+        int retval = magma_malloc( (void**) &st_leafmtxp->zu_gpu, (st_leafmtxp->gn)*sizeof(double) );
         if ( MAGMA_SUCCESS != retval ) {
             fprintf( stderr, "!!!! magma_malloc failed for zu_gpu\n");
             exit(0);
@@ -1267,12 +1298,18 @@ magma_setdevice( 1 );
     qsort( &sizes[nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
     #endif
     st_leafmtxp->batch_order = (int*)malloc(num_batch * sizeof(int));
+    #ifdef OUTPUT_SIZES
     FILE *fp = fopen( "sizes_sorted.dat","w");
+    #endif
     for (ip = 0; ip < num_batch; ip++) {
         st_leafmtxp->batch_order[ip] = sizes[sort_array_size*ip + 0];
+        #ifdef OUTPUT_SIZES
         fprintf(fp, "%d %d %d\n",sizes[sort_array_size*ip + 0],sizes[sort_array_size*ip + 1],sizes[sort_array_size*ip + 2]);
+        #endif
     }
+    #ifdef OUTPUT_SIZES
     fclose(fp);
+    #endif
     free(sizes);
 
     // parse all the blocks

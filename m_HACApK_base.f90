@@ -72,6 +72,7 @@ module m_HACApK_base
 #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
     integer(c_int) m
     integer(c_int) n
+    integer(c_int) gn
     integer(c_int) max_block
     type(c_ptr) :: mtx1_gpu
     type(c_ptr) :: mtx2_gpu
@@ -99,6 +100,9 @@ module m_HACApK_base
     type(c_ptr) :: h_N
     type(c_ptr) :: max_M
     type(c_ptr) :: max_N
+!
+    !integer mpi_comm
+    integer mpi_rank
 #endif
     type(st_HACApK_leafmtx),pointer :: st_lf(:)=>null()
   end type st_HACApK_leafmtxp
@@ -150,6 +154,11 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  type(st_HACApK_lcontrol) :: st_ctl
  integer,optional :: icomma
  character*32 logfile
+#ifdef HAVE_PaRSEC_SUBCOMM
+ integer my_rank(1)  ! MPI_Comm
+ integer my_comm     ! MPI_Comm
+ integer my_group    ! MPI_Group
+#endif
  allocate(st_ctl%param(100))
  st_ctl%param(1:100)=0.0
  st_ctl%param(1) =1;        ! Print : 0:Only Error 1:STD 2:Dubug
@@ -169,7 +178,7 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  st_ctl%param(83)=500;      ! solver : maximum iterative number
  st_ctl%param(85)=1;        ! solver : 1:BiCGSTAB 2:GCR(m)
  st_ctl%param(87)=8;        ! solver : number of iteration for reset
- st_ctl%param(99)=100       ! Measure the time of Ax; iterative number
+ st_ctl%param(99)=1         ! Measure the time of Ax; iterative number
  ierr=0; lrtrn=0
  if(present(icomma))then
    icomm=icomma; st_ctl%lf_umpi=1
@@ -188,6 +197,25 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  endif
  allocate(st_ctl%lpmd(30)); st_ctl%lpmd(:)=0
  st_ctl%lpmd(1)=icomm; st_ctl%lpmd(2)=nrank; st_ctl%lpmd(3)=irank; st_ctl%lpmd(4)=20
+#ifdef HAVE_PaRSEC
+  st_ctl%param(21)=200;       ! cluster : leaf size 15
+  if( irank .eq. 0 ) then
+    print*, ' '
+    print*, '!!! cluster leaf size is increased to 200 !!!'
+    print*, ' '
+  endif
+#ifdef HAVE_PaRSEC_SUBCOMM
+  my_rank(1) = irank
+  call MPI_Comm_group(MPI_COMM_WORLD, world_group, ierr);
+  call MPI_Group_incl(world_group, 1, my_rank, my_group, ierr);
+  call MPI_Comm_create(MPI_COMM_WORLD, my_group, my_comm, ierr);
+  call MPI_Group_free(world_group, ierr);
+  call MPI_Group_free(my_group, ierr);
+  st_ctl%lpmd(1)=my_comm; 
+  st_ctl%lpmd(2)=1; 
+  st_ctl%lpmd(3)=0;
+#endif
+#endif
  nthr=1
 !$omp parallel
   nthr = omp_get_num_threads()

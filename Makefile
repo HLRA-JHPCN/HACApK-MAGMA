@@ -41,13 +41,6 @@ endif
 #F90FLAGS += -g
 LINK=$(F90)
 
-#CC  = icc
-#F90 = ifort
-LINK = icpc
-LINK = ifort
-CPP  = mpiicpc
-#LINK = mpiifort
-
 OBJS = HACApK_FPGA.o \
        m_bem-bb-fw-coordinate.o HACApK_lib.o bem-bb-template-SCM-0.4.1.o m_HACApK_calc_entry_ij.o \
        m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.1.o \
@@ -57,10 +50,11 @@ LIBS = -cxxlib
 #LIBS+= -lifcore
 
 #MPI
-MPI_DIR    = /opt/ompi/2.0.1
-
-INCS+= -I$(MPI_DIR)/include 
-LIBS+= $(MPI_DIR)/lib/libmpi_mpifh.so
+#LINK = ifort
+#CPP  = mpiicpc
+#MPI_DIR    = /opt/ompi/2.0.1
+#INCS+= -I$(MPI_DIR)/include 
+#LIBS+= $(MPI_DIR)/lib/libmpi_mpifh.so
 
 # PaRSEC
 #PARSEC_DIR = /home/yamazaki/parsec-bitbucket/dplasma
@@ -83,6 +77,7 @@ LIBS+= $(MPI_DIR)/lib/libmpi_mpifh.so
 # MAGMA
 CUDA_DIR  = /opt/cuda/8.0
 MAGMA_DIR = /home/yamazaki/magma/bitbuckets/magma
+MAGMA_DIR = /home/yamazaki/release/magma-2.2.0
 
 INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
 

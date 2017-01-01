@@ -607,6 +607,8 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
  pointer (stpt, tmpleafmtxp)
  real*8 :: tmptmpa1
  real*8 :: enorm,unorm
+ real*8 :: rnorm_g,enorm_g,unorm_g
+ character(len=50) :: ErrFormat
  pointer (a1pt, tmptmpa1)
  integer*8 :: stpt2, a2pt
 !!!
@@ -616,6 +618,7 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
  lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;lthr(0:) => st_ctl%lthr; param=>st_ctl%param(:)
  mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1)
  mstep=param(99)
+ mstep=1 ! call it once
 !!! 
  tmpleafmtx => st_leafmtxp%st_lf
  stpt=loc(tmpleafmtx(1))
@@ -640,41 +643,55 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
 !
 #ifdef HAVE_MAGMA
    v(:)=1.0; b(:)=1.0
-   call c_HACApK_adot_body_lfcpy_gpu(st_leafmtxp)
+   call c_HACApK_adot_body_lfcpy_gpu(nd,st_leafmtxp)
    call c_HACApK_adot_body_lfmtx_gpu(v,st_leafmtxp,b,wws)
    call c_HACApK_adot_body_lfdel_gpu(st_leafmtxp)
    unorm = 0.0
-   do ii=1,nd
+   do ii=1,st_leafmtxp%m
        unorm = unorm + u(ii)*u(ii)
    enddo
    v = u - v
    enorm = 0.0
-   do ii=1,nd
+   do ii=1,st_leafmtxp%m
        enorm = enorm + v(ii)*v(ii)
    enddo
-   write(*,*)
-   write(*,*) 'error(CPU-GPU)',sqrt(enorm),sqrt(enorm)/sqrt(unorm)
-   write(*,*)
+   call MPI_Allreduce( enorm, enorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
+   call MPI_Allreduce( unorm, unorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
+   enorm_g = sqrt(enorm_g)
+   unorm_g = sqrt(unorm_g)
+   rnorm_g = enorm_g / unorm_g
+   if (st_leafmtxp%mpi_rank == 0) then
+       ErrFormat = "(A16, ES10.3, A3, ES10.3, A3, ES10.3)"
+       write(*,ErrFormat) ' error(CPU-GPU):' ,enorm_g ,' / ' ,unorm_g ,' = ',rnorm_g
+       write(*,*)
+   endif
 #endif 
 !
 #ifdef HAVE_MAGMA_BATCH
    v(:)=1.0; b(:)=1.0
 !   call c_HACApK_adot_body_lfcpy_batch(st_leafmtxp)
-   call c_HACApK_adot_body_lfcpy_batch_sorted(st_leafmtxp)
+   call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
    call c_HACApK_adot_body_lfmtx_batch(v,st_leafmtxp,b,wws)
    call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
    unorm = 0.0
-   do ii=1,nd
+   do ii=1,st_leafmtxp%m
        unorm = unorm + u(ii)*u(ii)
    enddo
    v = u - v
    enorm = 0.0
-   do ii=1,nd
+   do ii=1,st_leafmtxp%m
        enorm = enorm + v(ii)*v(ii)
    enddo
-   write(*,*)
-   write(*,*) 'error(CPU-GPU)',sqrt(enorm),sqrt(enorm)/sqrt(unorm)
-   write(*,*)
+   call MPI_Allreduce( enorm, enorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
+   call MPI_Allreduce( unorm, unorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
+   enorm_g = sqrt(enorm_g)
+   unorm_g = sqrt(unorm_g)
+   rnorm_g = enorm_g / unorm_g
+   if (st_leafmtxp%mpi_rank == 0) then
+       ErrFormat = "(A16, ES10.3, A3, ES10.3, A3, ES10.3)"
+       write(*,ErrFormat) ' error(CPU-GPU):' ,enorm_g ,' / ' ,unorm_g ,' = ',rnorm_g
+       write(*,*)
+   endif
 #endif
 !
 #ifdef HAVE_PaRSEC
