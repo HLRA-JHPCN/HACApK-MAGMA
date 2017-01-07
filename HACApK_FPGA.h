@@ -22,6 +22,7 @@ typedef struct stc_HACApK_leafmtxp {
   // GPU memory
   int m;         // matrix dimension
   int n;         // matrix dimension
+  int gn;        // matrix dimension (global)
   int max_block; // max block size
   magmaDouble_ptr *mtx1_gpu;
   magmaDouble_ptr *mtx2_gpu;
@@ -47,6 +48,9 @@ typedef struct stc_HACApK_leafmtxp {
   double **h_Y_array;
   magma_int_t *h_M, *h_N;
   magma_int_t *max_M, *max_N;
+  // MPI info
+  //MPI_Comm mpi_comm;
+  int      mpi_rank;
 #endif
   //
   stc_HACApK_leafmtx *st_lf;
