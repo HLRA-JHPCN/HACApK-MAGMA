@@ -618,7 +618,6 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
  lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;lthr(0:) => st_ctl%lthr; param=>st_ctl%param(:)
  mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1)
  mstep=param(99)
- mstep=1 ! call it once
 !!! 
  tmpleafmtx => st_leafmtxp%st_lf
  stpt=loc(tmpleafmtx(1))
@@ -640,7 +639,10 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
 !   >> C function <<
    u(:)=1.0; b(:)=1.0
    call c_HACApK_adot_body_lfmtx(u,st_leafmtxp,b,wws)
+ enddo
+!$omp end parallel
 !
+ do il=1,mstep
 #ifdef HAVE_MAGMA
    v(:)=1.0; b(:)=1.0
    call c_HACApK_adot_body_lfcpy_gpu(nd,st_leafmtxp)
@@ -698,7 +700,6 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
    call c_HACApK_PaRSEC(1,1,u,st_leafmtxp,b,wws)
 #endif
  enddo
-!$omp end parallel
  deallocate(wws)
 end subroutine HACApK_measurez_time_ax_FPGA_lfmtx
 
