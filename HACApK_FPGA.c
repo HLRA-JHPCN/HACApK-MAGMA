@@ -4,7 +4,6 @@
 #include	"omp.h"
 #include	"mpi.h"
 #include	"HACApK_FPGA.h"
-#include        <ISO_Fortran_binding.h>
 
 //!***c_HACApK_adot_body_lfmtx
 void  c_hacapk_adot_body_lfmtx_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu) {
