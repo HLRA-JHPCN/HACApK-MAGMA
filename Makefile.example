@@ -48,6 +48,7 @@ F90FLAGS = $(OPTFLAGS) -fpp1
 LDFLAGS = -mkl
 #INCS+= -I/usr/apps.sp3/isv/intel/ParallelStudioXE/ClusterEdition/2016-Update3/compilers_and_libraries_2016.3.210/linux/compiler/include
 endif
+
 #CCFLAGS += -g
 #F90FLAGS += -g
 LINK=$(F90)
@@ -56,17 +57,16 @@ OBJS = HACApK_FPGA.o \
        m_bem-bb-fw-coordinate.o HACApK_lib.o bem-bb-template-SCM-0.4.1.o m_HACApK_calc_entry_ij.o \
        m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.1.o \
 
-LIBS = -cxxlib 
-#LIBS+= -lifcore
+# PaRSEC
+#CPP = mpiicpc
 
-#MPI
+# forcing the link with OpenMPI
 #LINK = ifort
-#CPP  = mpiicpc
-#MPI_DIR    = /opt/ompi/2.0.1
-#INCS+= -I$(MPI_DIR)/include 
+#MPI_DIR = /opt/ompi/2.0.1
+#INCS = -I$(MPI_DIR)/include
+#LIBS = -cxxlib
 #LIBS+= $(MPI_DIR)/lib/libmpi_mpifh.so
 
-# PaRSEC
 #PARSEC_DIR = /home/yamazaki/parsec-bitbucket/dplasma
 #SOLVER_DIR = /home/yamazaki/pulsar/ierus/main/parsec
 #IERUS_DIR  = /home/yamazaki/pulsar/ierus/ierus_source/parsec
@@ -111,7 +111,6 @@ $(TARGET): $(OBJS)
 .cpp.o: *.c
 			$(CPP) -c $(CCFLAGS) $(INCS) $<
 .f90.o: *.f90
-#			echo 'f90 complile'
 			$(F90) -c $< $(F90FLAGS) $(INCS)
 clean:
 	rm -f *.o *.mod $(TARGET)
