@@ -251,7 +251,6 @@ endif
     print*,'_____________all time = ',sngl(time4),' [sec]'
   endif
 
-  write(6,*) 'done'
   flush(6)
 
 

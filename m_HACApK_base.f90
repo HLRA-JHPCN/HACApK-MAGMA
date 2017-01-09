@@ -128,8 +128,12 @@ module m_HACApK_base
     type(c_ptr) :: h_A_array
     type(c_ptr) :: h_X_array
     type(c_ptr) :: h_Y_array
+    type(c_ptr) :: h_type
+    type(c_ptr) :: h_I
+    type(c_ptr) :: h_J
     type(c_ptr) :: h_M
     type(c_ptr) :: h_N
+    type(c_ptr) :: h_lda
     type(c_ptr) :: max_M
     type(c_ptr) :: max_N
 #else
@@ -137,8 +141,12 @@ module m_HACApK_base
     real*8,   pointer :: h_A_array
     real*8,   pointer :: h_X_array
     real*8,   pointer :: h_Y_array
+    integer*4,pointer :: h_type
+    integer*4,pointer :: h_I
+    integer*4,pointer :: h_J
     integer*4,pointer :: h_M
     integer*4,pointer :: h_N
+    integer*4,pointer :: h_lda
     integer*4,pointer :: max_M
     integer*4,pointer :: max_N
 #endif
