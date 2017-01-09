@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# ran it with:
+# t2sub -q S -W group_list=t2g-jh160041 -l select=2:mpiprocs=3:mem=16gb -l walltime=00:20:00 -l place=scatter ./script
+#
+cd /home/usr2/16IH0462/github/HLRA-JHPCN/HACApK-FPGA
+source env.tsubame 
+
+#mpirun -np 1 -npernode 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../bem_bb_inputs/input_216h.pbf >& out.p1
+#mpirun -np 3 -npernode 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../bem_bb_inputs/input_216h.pbf >& out.p3
+mpirun -np 6 -npernode 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../bem_bb_inputs/input_216h.pbf >& out.p6
+#mpirun -np 6 -npernode 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../bem_bb_inputs/input_1ts.pbs >& out.p6
+
