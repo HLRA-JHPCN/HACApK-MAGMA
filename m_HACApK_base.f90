@@ -28,7 +28,9 @@
 !C  last modified by Akihiro Ida on Dec. 2016
 !C**************************************************************************
 module m_HACApK_base
+#if defined(ISO_C_BINDING)
  use iso_c_binding
+#endif
  use m_HACApK_calc_entry_ij
  implicit real*8(a-h,o-z)
  implicit integer*4(i-n)
@@ -59,17 +61,21 @@ module m_HACApK_base
 
 !*** type :: st_HACApK_leafmtxp
   type :: st_HACApK_leafmtxp
-!    integer*4 ltmtx  ! kind of the matrix; 1:rk 2:full
-!    integer*4 kt
-!    integer*4 nstrtl,ndl;
-!    integer*4 nstrtt,ndt;
-!    real*8,pointer :: a1(:,:)=>null(),a2(:,:)=>null()
-    integer(c_int) nd ! number of unknowns
-    integer(c_int) nlf ! number of sub-matrices
+#if defined(ISO_C_BINDING)
+    integer(c_int) nd    ! number of unknowns
+    integer(c_int) nlf   ! number of sub-matrices
     integer(c_int) nlfkt ! number of low-rank sub matrices
     integer(c_int) ktmax
     integer(c_int) st_lf_stride !!!
+#else
+    integer*4 nd    ! number of unknowns
+    integer*4 nlf   ! number of sub-matrices
+    integer*4 nlfkt ! number of low-rank sub matrices
+    integer*4 ktmax
+    integer*4 st_lf_stride !!!
+#endif
 #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
+#if defined(ISO_C_BINDING)
     integer(c_int) m
     integer(c_int) n
     integer(c_int) gn
@@ -80,7 +86,20 @@ module m_HACApK_base
     type(c_ptr) :: zau_gpu
     type(c_ptr) :: zau_pin
     type(c_ptr) :: zbu_gpu
+#else
+    integer*4 m
+    integer*4 n
+    integer*4 gn
+    integer*4 max_block
+    real*8,pointer :: mtx1_gpu
+    real*8,pointer :: mtx2_gpu
+    real*8,pointer :: zu_gpu
+    real*8,pointer :: zau_gpu
+    real*8,pointer :: zau_pin
+    real*8,pointer :: zbu_gpu
+#endif
 !
+#if defined(ISO_C_BINDING)
     integer(c_int) num_batch
     integer(c_int) total_size_y
     integer(c_int) transA
@@ -91,15 +110,46 @@ module m_HACApK_base
     type(c_ptr) :: d_N
     type(c_ptr) :: d_lda
     type(c_ptr) :: d_inc
+#else
+    integer*4 num_batch
+    integer*4 total_size_y
+    integer*4 transA
+    real*8,   pointer :: d_A_array
+    real*8,   pointer :: d_X_array
+    real*8,   pointer :: d_Y_array
+    integer*4,pointer :: d_M
+    integer*4,pointer :: d_N
+    integer*4,pointer :: d_lda
+    integer*4,pointer :: d_inc
+#endif
 !
+#if defined(ISO_C_BINDING)
     type(c_ptr) :: batch_order
     type(c_ptr) :: h_A_array
     type(c_ptr) :: h_X_array
     type(c_ptr) :: h_Y_array
+    type(c_ptr) :: h_type
+    type(c_ptr) :: h_I
+    type(c_ptr) :: h_J
     type(c_ptr) :: h_M
     type(c_ptr) :: h_N
+    type(c_ptr) :: h_lda
     type(c_ptr) :: max_M
     type(c_ptr) :: max_N
+#else
+    integer*4,pointer :: batch_order
+    real*8,   pointer :: h_A_array
+    real*8,   pointer :: h_X_array
+    real*8,   pointer :: h_Y_array
+    integer*4,pointer :: h_type
+    integer*4,pointer :: h_I
+    integer*4,pointer :: h_J
+    integer*4,pointer :: h_M
+    integer*4,pointer :: h_N
+    integer*4,pointer :: h_lda
+    integer*4,pointer :: max_M
+    integer*4,pointer :: max_N
+#endif
 !
     !integer mpi_comm
     integer mpi_rank

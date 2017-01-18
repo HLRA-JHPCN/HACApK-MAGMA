@@ -46,7 +46,10 @@ typedef struct stc_HACApK_leafmtxp {
   double **h_A_array;
   double **h_X_array;
   double **h_Y_array;
+  magma_int_t *h_type;
+  magma_int_t *h_I, *h_J;
   magma_int_t *h_M, *h_N;
+  magma_int_t *h_lda;
   magma_int_t *max_M, *max_N;
   // MPI info
   //MPI_Comm mpi_comm;
