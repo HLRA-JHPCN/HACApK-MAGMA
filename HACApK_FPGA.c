@@ -20,8 +20,8 @@ void  c_hacapk_adot_body_lfmtx_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, d
 
    ndl   =sttmp->ndl; // m: number of rows
    ndt   =sttmp->ndt; // n: number of columns
-   nstrtl=sttmp->nstrtl; // i: index of first row
-   nstrtt=sttmp->nstrtt; // j: index of first column
+   nstrtl=sttmp->nstrtl; // i: index of first row (base-1)
+   nstrtt=sttmp->nstrtt; // j: index of first column (base-1)
    if (sttmp->ltmtx == 1) { // compressed
      /**/
      double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
@@ -110,8 +110,8 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
 
         ndl    = sttmp->ndl; // m: number of rows
         ndt    = sttmp->ndt; // n: number of columns
-        nstrtl = sttmp->nstrtl; // i: index of first row
-        nstrtt = sttmp->nstrtt; // j: index of first column
+        nstrtl = sttmp->nstrtl; // i: index of first row (base-1)
+        nstrtt = sttmp->nstrtt; // j: index of first column (base-1)
         #if defined(GPU)
         int stream_id = ip%num_streams;
         #endif
@@ -253,12 +253,12 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
         sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
         ndl    = sttmp->ndl; // m: number of rows
         ndt    = sttmp->ndt; // n: number of columns
-        nstrtl = sttmp->nstrtl; // i: index of first row
-        nstrtt = sttmp->nstrtt; // j: index of first column
+        nstrtl = sttmp->nstrtl; // i: index of first row (base-1)
+        nstrtt = sttmp->nstrtt; // j: index of first column (base-1)
+
+        // local matrix size
         if (nstrtl == nstrtt) {
-            // diagonal block
             st_leafmtxp->m += ndl;
-            st_leafmtxp->n += ndt;
         }
         if (st_leafmtxp->max_block < max(ndl, ndt)) {
             st_leafmtxp->max_block = max(ndl, ndt);
@@ -297,6 +297,9 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
             st_leafmtxp->mtx2_gpu[ip] = NULL;
         }
     }
+    // let's just use global size.
+    st_leafmtxp->m = st_leafmtxp->gn;
+    st_leafmtxp->n = st_leafmtxp->gn;
     // workspace for GEMV on GPU
     st_leafmtxp->zu_gpu = NULL; 
     st_leafmtxp->zau_gpu = NULL;
@@ -750,13 +753,12 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
         kt     = sttmp->kt;  // rank
         ndl    = sttmp->ndl; // m: number of rows
         ndt    = sttmp->ndt; // n: number of columns
-        nstrtl = sttmp->nstrtl; // i: index of first row
-        nstrtt = sttmp->nstrtt; // j: index of first column
+        nstrtl = sttmp->nstrtl; // i: index of first row (base-1)
+        nstrtt = sttmp->nstrtt; // j: index of first column (base-1)
 
+        // local matrix size
         if (nstrtl == nstrtt) {
-            // diagonal block
             st_leafmtxp->m += ndl;
-            st_leafmtxp->n += ndt;
         }
         if (st_leafmtxp->max_block < max(ndl, ndt)) {
             st_leafmtxp->max_block = max(ndl, ndt);
@@ -782,6 +784,9 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
             num_batch += 1;
         }
     }
+    // let's just use global size.
+    st_leafmtxp->m = st_leafmtxp->gn;
+    st_leafmtxp->n = st_leafmtxp->gn;
     fflush(stdout);
     if (st_leafmtxp->mpi_rank == 0) {
         printf( " %d-by-%d matrix (# blocks=%d)\n",st_leafmtxp->m,st_leafmtxp->n,nlf );
@@ -845,7 +850,7 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     total_size_a = 0;
     num_batch = 0;
     int count = 0;
-    //#define OUTPUT_SIZES
+    #define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
     FILE *fp = fopen("sizes.dat","w");
     #endif
@@ -863,8 +868,8 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
             kt     = sttmp->kt;  // rank
             ndl    = sttmp->ndl; // m: number of rows
             ndt    = sttmp->ndt; // n: number of columns
-            nstrtl = sttmp->nstrtl; // i: index of first row
-            nstrtt = sttmp->nstrtt; // j: index of first column
+            nstrtl = sttmp->nstrtl; // i: index of first row (base-1)
+            nstrtt = sttmp->nstrtt; // j: index of first column (base-1)
             lda = magma_roundup( kt, batch_pad );
 
             // copy U^T
@@ -914,8 +919,8 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
 
             ndl    = sttmp->ndl; // m: number of rows
             ndt    = sttmp->ndt; // n: number of columns
-            nstrtl = sttmp->nstrtl; // i: index of first row
-            nstrtt = sttmp->nstrtt; // j: index of first column
+            nstrtl = sttmp->nstrtl; // i: index of first row (base-1)
+            nstrtt = sttmp->nstrtt; // j: index of first column (base-1)
 
             if (sttmp->ltmtx == 1) { // compressed
                 /**/
@@ -1152,13 +1157,12 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
         kt     = sttmp->kt;  // rank
         ndl    = sttmp->ndl; // m: number of rows
         ndt    = sttmp->ndt; // n: number of columns
-        nstrtl = sttmp->nstrtl; // i: index of first row
-        nstrtt = sttmp->nstrtt; // j: index of first column
+        nstrtl = sttmp->nstrtl; // i: index of first row (base-1)
+        nstrtt = sttmp->nstrtt; // j: index of first column (base-1)
 
+        // local matrix size
         if (nstrtl == nstrtt) {
-            // diagonal block
             st_leafmtxp->m += ndl;
-            st_leafmtxp->n += ndt;
         }
         if (st_leafmtxp->max_block < max(ndl, ndt)) {
             st_leafmtxp->max_block = max(ndl, ndt);
@@ -1339,6 +1343,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     st_leafmtxp->batch_order = (int*)malloc(num_batch * sizeof(int));
     #ifdef OUTPUT_SIZES
     FILE *fp = fopen( "sizes_sorted.dat","w");
+    fprintf(fp, "%d\n",num_batch);
     #endif
     for (ip = 0; ip < num_batch; ip++) {
         st_leafmtxp->batch_order[ip] = sizes[sort_array_size*ip + 0];
