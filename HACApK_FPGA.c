@@ -850,7 +850,7 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     total_size_a = 0;
     num_batch = 0;
     int count = 0;
-    #define OUTPUT_SIZES
+    //#define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
     FILE *fp = fopen("sizes.dat","w");
     #endif
@@ -1331,10 +1331,18 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             lwork = max(lwork, kt*ndl);
         }
     }
+    #ifdef OUTPUT_SIZES
+    FILE *fp = fopen( "sizes.dat","w");
+    fprintf(fp, "%d\n",num_batch);
+    for (ip = 0; ip < num_batch; ip++) {
+        fprintf(fp, "%d %d %d\n",sizes[sort_array_size*ip + 0],sizes[sort_array_size*ip + 1],sizes[sort_array_size*ip + 2]);
+    }
+    fclose(fp);
+    #endif
     #if defined(SORT_BATCH_BY_SIZES)
     #if defined(USE_QSORT)
     qsort( sizes, nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
-    qsort( &sizes[nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
+    qsort( &sizes[sort_array_size*nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
     #else
     hacapk_sort(nlf, sizes);
     hacapk_sort(num_batch-nlf, &sizes[nlf]);
@@ -1342,8 +1350,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #endif
     st_leafmtxp->batch_order = (int*)malloc(num_batch * sizeof(int));
     #ifdef OUTPUT_SIZES
-    FILE *fp = fopen( "sizes_sorted.dat","w");
-    fprintf(fp, "%d\n",num_batch);
+    fp = fopen( "sizes_sorted.dat","w");
+    fprintf(fp, "%d %d\n",nlf,num_batch);
     #endif
     for (ip = 0; ip < num_batch; ip++) {
         st_leafmtxp->batch_order[ip] = sizes[sort_array_size*ip + 0];
