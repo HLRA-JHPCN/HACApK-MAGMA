@@ -850,7 +850,7 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     total_size_a = 0;
     num_batch = 0;
     int count = 0;
-    #define OUTPUT_SIZES
+    //#define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
     FILE *fp = fopen("sizes.dat","w");
     #endif
