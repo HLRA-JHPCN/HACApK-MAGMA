@@ -380,10 +380,10 @@ end subroutine HACApK_bicgstab_lfmtx
 !$omp end workshare
 !$omp single
  zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
- if (mpinr == 0) print*,'Original relative residual norm =',zrnorm/bnorm
+ if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
 !$omp end single
- do in= 1,mstep
-   if (zrnorm/bnorm < eps) exit
+ do in=1,mstep
+   if(zrnorm/bnorm<eps) exit
 !$omp workshare
    zp(:nd) =zr(:nd)+beta*(zp(:nd)-zeta*zakp(:nd))
    zkp(:nd)=zp(:nd)
@@ -415,7 +415,7 @@ end subroutine HACApK_bicgstab_lfmtx
    call MPI_Barrier( icomm, ierr )
    en_measure_time=MPI_Wtime()
    time = en_measure_time - st_measure_time
-   if(st_ctl%param(1) > 0 .and. mpinr == 0) print*,in,time,log10(zrnorm/bnorm)
+   if(st_ctl%param(1)>0 .and. mpinr==0) print*,in,time,log10(zrnorm/bnorm)
 !$omp end single
  enddo
 !$omp end parallel
@@ -700,6 +700,7 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
    call c_HACApK_PaRSEC(1,1,u,st_leafmtxp,b,wws)
 #endif
  enddo
+ print*,'c_HACApK_adot_body_lfmtx end'
  deallocate(wws)
 end subroutine HACApK_measurez_time_ax_FPGA_lfmtx
 

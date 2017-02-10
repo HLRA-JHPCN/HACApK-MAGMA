@@ -108,10 +108,6 @@ contains
 !    rhs(il)=zgmid(il,3)
 !***************************************************
   enddo
-
-!***************************************************
-! generate the compressed matrix and solve
-!***************************************************
   bembb2hacapk= hacapk_gensolv(st_leafmtxp,st_bemv,st_ctl,zgmid,rhs,sol,ztol)
   lrtrn=HACApK_free_leafmtxp(st_leafmtxp)
   if(st_ctl%param(1)>1 .and. mpinr==0)  print*,'func bembb2hacapk end'

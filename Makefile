@@ -1,6 +1,7 @@
 #SYSTEM = FX10
-SYSTEM = INTEL
+#SYSTEM = INTEL
 #SYSTEM = XC30
+SYSTEM = Tsubame
 
 #FX10
 ifeq ($(SYSTEM),FX10)
@@ -15,8 +16,8 @@ endif
 
 #intel
 ifeq ($(SYSTEM),INTEL)
-#OPTFLAGS = -O3 -traceback -ip -heap-arrays -openmp
-OPTFLAGS = -openmp -O3 -ip
+#OPTFLAGS = -O3 -traceback -ip -heap-arrays -qopenmp
+OPTFLAGS = -qopenmp -O3 -ip
 CC=mpiicc
 F90=mpiifort
 CCFLAGS = $(OPTFLAGS)
@@ -37,26 +38,39 @@ CCFLAGS = $(OPTFLAGS)
 F90FLAGS = $(OPTFLAGS)
 endif
 
-#CCFLAGS += -g
-#F90FLAGS += -g
+#Tsubame
+SYSTEM = TSUBAME
+ifeq ($(SYSTEM),TSUBAME)
+#OPTFLAGS = -O3 -traceback -ip -heap-arrays -qopenmp
+#OPTFLAGS = -openmp -O3
+OPTFLAGS = -qopenmp -O3
+#CC=mpicc
+#F90=mpif90
+CC=mpiicc
+F90=mpiifort
+CCFLAGS = $(OPTFLAGS)
+F90FLAGS = $(OPTFLAGS) -fpp
+#F90FLAGS = $(OPTFLAGS) -fpp1 -check all
+LDFLAGS = -mkl
+#INCS+= -I/usr/apps.sp3/isv/intel/ParallelStudioXE/ClusterEdition/2016-Update3/compilers_and_libraries_2016.3.210/linux/compiler/include
+endif
+
 LINK=$(F90)
 
 OBJS = HACApK_FPGA.o \
-       m_bem-bb-fw-coordinate.o HACApK_lib.o bem-bb-template-SCM-0.4.1.o m_HACApK_calc_entry_ij.o \
-       m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.1.o \
-
-INCS =
-LIBS = -cxxlib 
-#LIBS+= -lifcore
-
-#MPI
-#LINK = ifort
-#CPP  = mpiicpc
-#MPI_DIR    = /opt/ompi/2.0.1
-#INCS+= -I$(MPI_DIR)/include 
-#LIBS+= $(MPI_DIR)/lib/libmpi_mpifh.so
+       HACApK_lib.o m_ppohBEM_user_func.o m_ppohBEM_matrix_element_ij.o m_HACApK_calc_entry_ij.o \
+       m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.2.o \
 
 # PaRSEC
+#CPP = mpiicpc
+
+# forcing the link with OpenMPI
+#LINK = ifort
+#MPI_DIR = /opt/ompi/2.0.1
+#INCS = -I$(MPI_DIR)/include
+#LIBS = -cxxlib
+#LIBS+= $(MPI_DIR)/lib/libmpi_mpifh.so
+
 #PARSEC_DIR = /home/yamazaki/parsec-bitbucket/dplasma
 #SOLVER_DIR = /home/yamazaki/pulsar/ierus/main/parsec
 #IERUS_DIR  = /home/yamazaki/pulsar/ierus/ierus_source/parsec
@@ -75,15 +89,14 @@ LIBS = -cxxlib
 
 
 # MAGMA
-CUDA_DIR  = /opt/cuda/8.0
-MAGMA_DIR = /home/yamazaki/magma/bitbuckets/magma
-MAGMA_DIR = /home/yamazaki/release/magma-2.2.0
+CUDA_DIR  = /usr/apps.sp3/cuda/7.5
+MAGMA_DIR = /home/usr2/16IH0462/magma/release/magma-2.2.0
 
 INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
 
 LIBS+= -L$(CUDA_DIR)/lib64 -lcublas -lcusparse -lcudart $(MAGMA_DIR)/lib/libmagma.a
 
-CCFLAGS += -DHAVE_MAGMA 
+CCFLAGS += -DHAVE_MAGMA
 F90FLAGS+= -DHAVE_MAGMA
 
 CCFLAGS += -DHAVE_MAGMA_BATCH
@@ -91,7 +104,9 @@ F90FLAGS+= -DHAVE_MAGMA_BATCH
 
 #CCFLAGS += -Wall -Wremarks -Wcheck
 
+
 TARGET=bem-bb-SCM.out
+
 .SUFFIXES: .o .c .f90
 
 $(TARGET): $(OBJS)
@@ -99,10 +114,7 @@ $(TARGET): $(OBJS)
 
 .c.o: *.c
 			$(CC) -c $(CCFLAGS) $(INCS) $<
-.cpp.o: *.c
-			$(CPP) -c $(CCFLAGS) $(INCS) $<
 .f90.o: *.f90
-#			echo 'f90 complile'
 			$(F90) -c $< $(F90FLAGS) $(INCS)
 clean:
 	rm -f *.o *.mod $(TARGET)

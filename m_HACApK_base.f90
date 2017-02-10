@@ -1,7 +1,7 @@
 !=====================================================================*
 !                                                                     *
 !   Software Name : HACApK                                            *
-!         Version : 1.0.0                                             *
+!         Version : 1.1.0                                             *
 !                                                                     *
 !   License                                                           *
 !     This file is part of HACApK.                                    *
@@ -25,7 +25,9 @@
 !C**************************************************************************
 !C  This file includes basic routines for H-matrices
 !C  created by Akihiro Ida at Kyoto University on May 2012
-!C  last modified by Akihiro Ida on Dec. 2016
+!C  added functions related to ACA+ to HACApK1.0.0 on Nov. 2016
+!C  corrected the allocation for st_ctl%lthr on Nov. 2016
+!C  last modified by Akihiro Ida on Jan. 2017
 !C**************************************************************************
 module m_HACApK_base
 #if defined(ISO_C_BINDING)
@@ -52,11 +54,10 @@ module m_HACApK_base
   type :: st_HACApK_leafmtx
     integer*4 ltmtx  ! kind of the matrix; 1:rk 2:full
     integer*4 kt
-    integer*4 nstrtl, ndl;
-    integer*4 nstrtt, ndt;
+    integer*4 nstrtl,ndl;
+    integer*4 nstrtt,ndt;
     integer*4 a1size !!!
-    real*8,pointer :: a1(:,:)=>null()
-    real*8,pointer :: a2(:,:)=>null()
+    real*8,pointer :: a1(:,:)=>null(),a2(:,:)=>null()
   end type st_HACApK_leafmtx
 
 !*** type :: st_HACApK_leafmtxp
@@ -219,7 +220,7 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  st_ctl%param(21)=15;       ! cluster : leaf size 15
  st_ctl%param(22)=1.0;      ! cluster : max leaf size 1.0*nffc
  st_ctl%param(51)=2.0;      ! H-matrix : dicision param of distance 2.0
- st_ctl%param(60)=1         ! 1:ACA  2:ACA+
+ st_ctl%param(60)=2         ! 1:ACA  2:ACA+
  st_ctl%param(61)=1         ! ACA norm 1:MREM  2:test 3:norm
  st_ctl%param(62)=7         ! ACA : predictive average of k
  st_ctl%param(63)=1000;     ! ACA : k-max of R_k-matrix 30
@@ -261,8 +262,8 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
   call MPI_Comm_create(MPI_COMM_WORLD, my_group, my_comm, ierr);
   call MPI_Group_free(world_group, ierr);
   call MPI_Group_free(my_group, ierr);
-  st_ctl%lpmd(1)=my_comm; 
-  st_ctl%lpmd(2)=1; 
+  st_ctl%lpmd(1)=my_comm;
+  st_ctl%lpmd(2)=1;
   st_ctl%lpmd(3)=0;
 #endif
 #endif
@@ -693,6 +694,207 @@ endfunction
 ! stop
  endfunction
 
+!***HACApK_acaplus
+ integer function HACApK_acaplus(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lod,st_bemv,kmax,eps,znrmmat,pACA_EPS)
+ type(st_HACApK_calc_entry) :: st_bemv
+ real*8 :: param(:)
+ real*8,target :: zaa(ndl,kmax),zab(ndt,kmax)
+ integer*4 :: lod(:)
+ integer*4,dimension(:), allocatable :: lrow_msk,lcol_msk
+ real*8,dimension(:), allocatable :: pa_ref, pb_ref
+ real*8,pointer :: prow(:),pcol(:)
+ 1000 format(5(a,i12)/)
+ 2000 format(5(a,1pe15.8)/)
+
+  za_ACA_EPS=1.0e-30
+! write(6,1000) 'nstrtl=',nstrtl,' nstrtt=',nstrtt,' ndl=',ndl,' ndt=',ndt
+ znrm=znrmmat*sqrt(real(ndl)*real(ndt))
+ if(param(61)==2 .or. param(61)==1) ACA_EPS=pACA_EPS
+ if(param(61)==3) ACA_EPS=pACA_EPS*znrm
+ 
+ HACApK_acaplus=0; ntries = max(ndl,ndt)+1; ntries_row = 6; ntries_col = 6;
+ allocate(lrow_msk(ndl),lcol_msk(ndt))
+ k = 0; lrow_msk(:)=0; lcol_msk(:)=0
+ 
+  j_ref=1; allocate(pa_ref(ndl)) ! arbitrary j_ref
+  call HACApK_calc_vec(zaa, zab, ndl, k, j_ref, pa_ref, nstrtl, nstrtt,lod, st_bemv, lrow_msk, 1)
+!!!  print*,'pa_ref=',pa_ref
+  colnorm = HACApK_unrm_d(ndl,pa_ref)
+
+  call HACApK_minabsvalloc_d(pa_ref,rownorm,i_ref,ndl) ! determine i_ref:=argmin ||pa_ref(1:ndl)||
+!!!    print*,'i_ref=',i_ref
+  allocate(pb_ref(ndt))
+  call HACApK_calc_vec(zab, zaa, ndt, k, i_ref, pb_ref, nstrtl, nstrtt,lod, st_bemv, lcol_msk,0)
+!!!  print*,'pb_ref=',pb_ref
+  rownorm=HACApK_unrm_d(ndt,pb_ref)
+
+  apxnorm = 0.0; lstop_aca = 0;
+    
+  do while((k<kmax) .and. (ntries_row>0 .or. ntries_col>0) .and. (ntries>0))
+    ntries=ntries-1
+    pcol => zaa(:,k+1); prow => zab(:,k+1)
+    col_maxval = 0.0; call HACApK_maxabsvalloc_d(pa_ref,col_maxval,i,ndl)
+    row_maxval = 0.0; call HACApK_maxabsvalloc_d(pb_ref,row_maxval,j,ndt)
+    
+!!!    write(6,1000) 'i=',i,' i_ref=',i_ref,' j=',j,' j_ref=',j_ref
+    
+    if(row_maxval>col_maxval)then
+      if(j/=j_ref)then; call HACApK_calc_vec(zaa, zab, ndl, k, j, pcol, nstrtl, nstrtt,lod, st_bemv, lrow_msk, 1)
+      else; pcol(:)=pa_ref(:)
+      endif
+      call HACApK_maxabsvalloc_d(pcol,col_maxval,i,ndl)
+            
+      if(col_maxval < ACA_EPS .and. k>=param(64))then; lstop_aca = 1; 
+!         print*,'2***************lstop_aca==1***********************2'
+      else
+        call HACApK_calc_vec(zab, zaa, ndt, k, i, prow, nstrtl, nstrtt,lod, st_bemv, lcol_msk,0)
+        if(abs(pcol(i))>1.0e-20) then
+          zinvmax=1.0/pcol(i)
+        else
+          k=max(k-1,0); exit
+        endif
+!        if(isnan(zinvmax))then
+!          print*,'1.0/pcol(i)=NaN',' k=',k
+!          exit
+!          stop
+!        endif
+        pcol(:)=pcol(:)*zinvmax
+      endif
+    else
+      if(i/=i_ref)then; call HACApK_calc_vec(zab, zaa, ndt, k, i, prow, nstrtl, nstrtt,lod, st_bemv, lcol_msk,0)
+      else;  prow(:)=pb_ref(:)
+      endif
+      call HACApK_maxabsvalloc_d(prow,row_maxval,j,ndt)
+      
+      if(row_maxval < ACA_EPS .and. k>=param(64))then; lstop_aca = 1
+!         print*,'3***************lstop_aca==1***********************3'
+      else
+        call HACApK_calc_vec(zaa, zab, ndl, k, j, pcol, nstrtl, nstrtt,lod, st_bemv, lrow_msk, 1)
+        if(abs(prow(j))>1.0e-20) then
+          zinvmax=1.0/prow(j)
+        else
+          k=max(k-1,0); exit
+        endif
+!        if(isnan(zinvmax))then
+!          print*,'1.0/prow(j)=NaN',' k=',k
+!          exit
+!          stop
+!        endif
+        prow(:)=prow(:)*zinvmax
+      endif
+    endif
+    lrow_msk(i) = 1; lcol_msk(j) = 1
+!!!    write(6,1000) 'i=',i,' i_ref=',i_ref,' j=',j,' j_ref=',j_ref
+    
+    if(i/=i_ref)then
+      zinvmax = -pcol(i_ref)
+      pb_ref(:)=pb_ref(:)+prow(:)*zinvmax
+      rownorm = HACApK_unrm_d(ndt,pb_ref)
+    endif
+    if(i==i_ref .or. rownorm<ACA_EPS)then
+      if(i==i_ref) ntries_row=ntries_row+1
+      if(ntries_row>0)then
+        rownorm = 0.0; i=i_ref
+!        print*,'lrow_msk',lrow_msk
+        do while(i/=mod((i_ref+ndl-2),ndl)+1 .and. rownorm<za_ACA_EPS .and. ntries_row>0)
+!          print*,'i=',i,' ii=',mod((i_ref+ndl-2),ndl)+1
+          if(lrow_msk(i)==0)then
+!            write(6,1000) 'i=',i
+            call HACApK_calc_vec(zab, zaa, ndt, k+1, i, pb_ref, nstrtl, nstrtt,lod, st_bemv, lcol_msk,0)
+            rownorm = HACApK_unrm_d(ndt,pb_ref)
+            if(rownorm<ACA_EPS) lrow_msk(i) = 1
+            ntries_row=ntries_row-1
+          else
+            rownorm = 0.0;
+          endif
+          i=mod(i,ndl)+1
+        enddo
+        i_ref=mod((i+ndl-2),ndl)+1
+      endif
+    endif
+!!!    print*,'i_ref=',i_ref
+    
+    if(j/=j_ref)then
+      zinvmax = -prow(j_ref)
+      pa_ref(:)=pa_ref(:)+pcol(:)*zinvmax
+      colnorm = HACApK_unrm_d(ndl,pa_ref)
+    endif
+    if(j==j_ref .or. colnorm<ACA_EPS)then
+      if(j==j_ref) ntries_col=ntries_col+1
+      if(ntries_col>0)then
+        colnorm = 0.0; j=j_ref
+!        print*,'lcol_msk',lcol_msk
+        do while(j/=mod((j_ref+ndt-2),ndt)+1 .and. colnorm<za_ACA_EPS .and. ntries_col>0)
+          if(lcol_msk(j)==0)then
+            call HACApK_calc_vec(zaa, zab, ndl, k+1, j, pa_ref, nstrtl, nstrtt,lod, st_bemv, lrow_msk, 1)
+            colnorm = HACApK_unrm_d(ndl,pa_ref)
+            if(colnorm<ACA_EPS) lcol_msk(j)=1
+            ntries_col=ntries_col-1
+          else
+            colnorm = 0.0
+          endif
+          j=mod(j,ndt)+1
+        enddo
+        j_ref=mod((j+ndt-2),ndt)+1
+      endif
+    endif
+
+!    write(6,2000) 'colnorm=',colnorm,' rownorm=',rownorm
+    if(colnorm<ACA_EPS .and. rownorm<ACA_EPS .and. k>=param(64))then
+      lstop_aca=1; k=k+1;
+!       print*,'1***************lstop_aca==1***********************1'
+    endif
+
+    if(lstop_aca==0)then
+      blknorm = (HACApK_unrm_d(ndl,pcol)*HACApK_unrm_d(ndt,prow))
+      if(k == 0)then
+        if(param(61)==1)then
+          apxnorm = blknorm
+        elseif(param(61)==2 .or. param(61)==3)then
+          apxnorm =znrm
+        else
+!$omp critical
+          print*,'ERROR!:: invalid param(61)=',param(61)
+!$omp end critical
+          stop
+        endif
+      else
+        if(    blknorm < apxnorm * eps &
+         .and. rownorm < apxnorm * eps &
+         .and. colnorm < apxnorm * eps &
+         .and. k>=param(64)) lstop_aca = 1;  
+      endif
+    endif
+  if(.false.)then
+!$omp critical
+    print*,'pcol'; print*,pcol
+    print*,'prow'; print*,prow
+!$omp end critical
+  endif
+    if(lstop_aca==1 .and. k>=param(64)) exit
+    k=k+1
+  enddo
+!  if(k==kmax .or. ntries_row==0 .or. ntries_col==0 .or. ntries==0)then
+!    k=k-1
+!  endif
+  
+  if(k<param(64))then
+!$omp critical
+    print*, 'colnorm=',colnorm,' rownorm=',rownorm,'ACA_EPS=',ACA_EPS
+    print*, 'col_maxval=',col_maxval,' row_maxval=',row_maxval
+    print*, 'ntries_row=',ntries_row,' ntries_col=',ntries_col,' ntries=',ntries
+    print*, 'k=',k
+!    k=k-1; if(k<1) stop
+!    stop
+!$omp end critical
+  endif
+  deallocate(lrow_msk,lcol_msk,pa_ref,pb_ref)
+  HACApK_acaplus=k
+!!!  print*,'HACApK_acaplus=',HACApK_acaplus
+!!!  write(6,2000) 'blknorm=',blknorm/apxnorm,' colnorm=',colnorm/apxnorm,' rownorm=',rownorm/apxnorm
+!!!  if(nstrtt==         113) stop
+ endfunction
+ 
 !***HACApK_fill_leafmtx_hyp
  subroutine HACApK_fill_leafmtx_hyp(st_lf,st_bemv,param,znrmmat,lpmd,lnmtx,lodl,lodt,nd,nlf,lnps,lnpe,lthr)
 ! type(st_HACApK_leafmtxp) ::  st_leafmtxp
@@ -728,8 +930,10 @@ endfunction
      endif
      if(param(60)==1)then
        kt=HACApK_aca(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,st_bemv,kparam,eps,znrmmat,ACA_EPS)
+     elseif(param(60)==2)then
+       kt=HACApK_acaplus(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,st_bemv,kparam,eps,znrmmat,ACA_EPS)
      else
-       print*,'Only ACA is avairable! Set param(60)=1.'
+       print*,'Only ACA and ACA+ is avairable! Set param(60)=1 or 2.'
        stop
      endif
      if(kt>kparam-1) then
@@ -801,8 +1005,10 @@ endfunction
      nstrtt_c=nstrtt-1; nstrtl_c=nstrtl-1
      if(param(60)==1)then
        kt=HACApK_aca(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,st_bemv,kparam,eps,znrmmat,ACA_EPS)
+     elseif(param(60)==2)then
+       kt=HACApK_acaplus(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,st_bemv,kparam,eps,znrmmat,ACA_EPS)
      else
-       print*,'Only ACA is avairable! Set param(60)=1.'
+       print*,'Only ACA and ACA+ is avairable! Set param(60)=1 or 2.'
        stop
      endif
      if(kt>kparam-1) then

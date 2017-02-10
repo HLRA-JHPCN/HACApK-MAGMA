@@ -179,7 +179,6 @@ program ppohBEM_bem_bb_dense_mpi
     endif
 !    if(st_ctl%param(1)>1)  print*,'func Hacapk_Init end'
     
-    write(*,*) ' Tol',ppohBEM_tor
     lrtrn= bembb2hacapk(st_bemv, st_ctl, st_ppohBEM_np, ppohBEM_face2node,ppohBEM_dble_para_fc,ppohBEM_rhs,ppohBEM_sol,ppohBEM_tor, &
                         ppohBEM_int_para_fc,ppohBEM_nond,ppohBEM_nofc,ppohBEM_nond_on_face,ppohBEM_number_element_dof,&
                         ppohBEM_ndble_para_fc,ppohBEM_nint_para_fc)
@@ -251,7 +250,6 @@ endif
     print*,'_____________all time = ',sngl(time4),' [sec]'
   endif
 
-  flush(6)
 
 
 1000  continue
