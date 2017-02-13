@@ -100,7 +100,9 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
     #endif
 
     // parse all the blocks
+    #ifdef PROF_MAGMA_BATCH
     double tic = MPI_Wtime();
+    #endif
     nlf=st_leafmtxp->nlf;
     for (ip = 0; ip < nlf; ip++) {
         /**/
@@ -199,17 +201,21 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
     // synch to get time
     MPI_Barrier(MPI_COMM_WORLD);
     magma_queue_sync( queue[0] );
+    #ifdef PROF_MAGMA_BATCH
     if (st_leafmtxp->mpi_rank == 0) {
         printf( " time_gpu: %.2e seconds\n\n",MPI_Wtime()-tic );
     }
+    #endif
     // copy back
     magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue[0] );
     magma_queue_destroy( queue[0] );
     #else
     MPI_Barrier(MPI_COMM_WORLD);
+    #ifdef PROF_MAGMA_BATCH
     if (st_leafmtxp->mpi_rank == 0) {
         printf( " time_cpu: %.2e seconds\n\n",MPI_Wtime()-tic );
     }
+    #endif
     #endif
 }
 
@@ -446,6 +452,10 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
 
     // copy the input vector to GPU
     double * zau_batch = NULL;
+    MPI_Barrier(MPI_COMM_WORLD);
+    #ifdef PROF_MAGMA_BATCH
+    double tic = MPI_Wtime();
+    #endif
     //#define ACCUME_ON_CPU
     #if defined(ACCUME_ON_CPU)
     magma_dmalloc_pinned( &zau_batch,  batch_count*(st_leafmtxp->max_block) );
@@ -455,8 +465,10 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     magma_dsetvector( st_leafmtxp->gn,  zu, 1, st_leafmtxp->zu_gpu,  1, queue );
 
     // start timer
-    MPI_Barrier(MPI_COMM_WORLD);
-    double tic = MPI_Wtime();
+    #ifdef PROF_MAGMA_BATCH
+    double time_copy = MPI_Wtime()-tic;
+    tic = MPI_Wtime();
+    #endif
 
     // parse all the blocks
     int num_batch = 0;
@@ -487,20 +499,30 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
                                              zau_batch, zau, queue);
         #endif
 
+        #ifdef PROF_MAGMA_BATCH
         if (st_leafmtxp->mpi_rank == 0) printf( " batchCount = %d, ip=%d:%d\n",batchCount,ip_start,ip_start+batchCount-1 );
+        #endif
         num_batch +=(1+ batchCount);
         count ++;
     }
     // stop timer
     magma_queue_sync( queue );
     MPI_Barrier(MPI_COMM_WORLD);
-    if (st_leafmtxp->mpi_rank == 0) {
-        printf( " time_batch: %.2e seconds\n\n",MPI_Wtime()-tic );
-    }
+    #ifdef PROF_MAGMA_BATCH
+    double time_batch = MPI_Wtime()-tic;
+    tic = MPI_Wtime();
+    #endif
     #if defined(ACCUME_ON_CPU)
     magma_free_pinned(zau_batch);
     #else
     magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue );
+    #endif
+    #ifdef PROF_MAGMA_BATCH
+    time_copy += MPI_Wtime()-tic;
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( " time_copy : %.2e seconds\n",time_batch );
+        printf( " time_batch: %.2e seconds\n\n",time_copy );
+    }
     #endif
     fflush(stdout);
 
@@ -720,6 +742,7 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     magma_setdevice( get_device_id(st_leafmtxp) );
     magma_getdevice( &cdev );
     magma_queue_create( cdev, &queue );
+    printf( " processor %d uses %d GPU\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%gpus_per_proc);
 
     // number of blocks
     nlf = st_leafmtxp->nlf; 
