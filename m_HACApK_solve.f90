@@ -100,7 +100,13 @@ contains
  zau(:nd)=0.0d0
 !$omp barrier
 !!! call HACApK_adot_body_lfmtx_hyp(zau,st_leafmtxp,st_ctl,zu,nd)
+#if defined(BICG_MAGMA_BATCH)
+   call c_HACApK_adot_body_lfmtx_batch(zau,st_leafmtxp,zu,wws)
+#elif defined(BICG_MAGMA)
+   call c_HACApK_adot_body_lfmtx_gpu(v,st_leafmtxp,b,wws)
+#else
    call c_HACApK_adot_body_lfmtx(zau,st_leafmtxp,zu,wws)
+#endif
 !$omp barrier
 !$omp master
  if(nrank>1)then
@@ -380,10 +386,23 @@ end subroutine HACApK_bicgstab_lfmtx
 !$omp end workshare
 !$omp single
  zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
- if (mpinr == 0) print*,'Original relative residual norm =',zrnorm/bnorm
+ if(mpinr==0) flush(output_unit)
+ if(mpinr==0) print*,' '
+#if defined(BICG_MAGMA_BATCH)
+ if(mpinr==0) print*,' ** BICG with MAGMA batched **'
+ call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
+#elif defined(BICG_MAGMA)
+ if(mpinr==0) print*,' ** BICG with BLAS (MAGMA or MKL) **'
+ call c_HACApK_adot_body_lfcpy_gpu(nd,st_leafmtxp)
+#else
+ if(mpinr==0) print*,' ** BICG, original **'
+#endif
+ if(mpinr==0) print*,' '
+ if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
+ if(mpinr==0) flush(output_unit)
 !$omp end single
- do in= 1,mstep
-   if (zrnorm/bnorm < eps) exit
+ do in=1,mstep
+   if(zrnorm/bnorm<eps) exit
 !$omp workshare
    zp(:nd) =zr(:nd)+beta*(zp(:nd)-zeta*zakp(:nd))
    zkp(:nd)=zp(:nd)
@@ -415,10 +434,15 @@ end subroutine HACApK_bicgstab_lfmtx
    call MPI_Barrier( icomm, ierr )
    en_measure_time=MPI_Wtime()
    time = en_measure_time - st_measure_time
-   if(st_ctl%param(1) > 0 .and. mpinr == 0) print*,in,time,log10(zrnorm/bnorm)
+   if(st_ctl%param(1)>0 .and. mpinr==0) print*,in,time,log10(zrnorm/bnorm)
 !$omp end single
  enddo
 !$omp end parallel
+#if defined(BICG_MAGMA_BATCH)
+ call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
+#elif defined(BICG_MAGMA)
+ call c_HACApK_adot_body_lfdel_gpu(st_leafmtxp)
+#endif
 end subroutine HACApK_bicgstab_cax_lfmtx_hyp
 
 !***HACApK_bicgstab_lfmtx_hyp
@@ -594,10 +618,17 @@ end subroutine HACApK_measurez_time_ax_lfmtx
 !***HACApK_measurez_time_ax_FPGA_lfmtx
 subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) bind(C)
  use, intrinsic ::  iso_c_binding
+!#ifdef HAVE_MAGMA
+! use cudafor
+!#endif
  include 'mpif.h'
  type(st_HACApK_leafmtxp) :: st_leafmtxp
  type(st_HACApK_lcontrol) :: st_ctl
+!#ifdef HAVE_MAGMA
+! real*8,dimension(:),allocatable, pinned :: wws,wwr,u,v,b
+!#else
  real*8,dimension(:),allocatable :: wws,wwr,u,v,b
+!#endif
  integer*4 :: isct(2),irct(2)
  real*8,pointer :: param(:)
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
@@ -700,6 +731,7 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
    call c_HACApK_PaRSEC(1,1,u,st_leafmtxp,b,wws)
 #endif
  enddo
+ print*,'c_HACApK_adot_body_lfmtx end'
  deallocate(wws)
 end subroutine HACApK_measurez_time_ax_FPGA_lfmtx
 

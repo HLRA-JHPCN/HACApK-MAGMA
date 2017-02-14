@@ -24,9 +24,8 @@
 !=====================================================================*
 module m_HACApK_calc_entry_ij
 
-!use m_ppohBEM_matrix_element_ij
-  use m_ppohBEM_coordinate
-
+use m_ppohBEM_matrix_element_ij
+!*** type :: st_HACApK_calc_entry
   type :: st_HACApK_calc_entry
   real*8,pointer :: ao(:)
   integer :: nd,lp61
@@ -44,8 +43,6 @@ contains
 !***HACApK_entry_ij
   real*8 function HACApK_entry_ij(i, j, zbemv)
   type(st_HACApK_calc_entry) :: zbemv
-
-  real*8, EXTERNAL ::   ppohBEM_matrix_element_ij
   
   HACApK_entry_ij=ppohBEM_matrix_element_ij(i, j, &
                                             zbemv%nond, zbemv%nofc, zbemv%nond_on_face, zbemv%np, &

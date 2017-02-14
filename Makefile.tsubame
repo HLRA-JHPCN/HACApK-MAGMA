@@ -1,6 +1,7 @@
 #SYSTEM = FX10
 #SYSTEM = INTEL
 #SYSTEM = XC30
+SYSTEM = Tsubame
 
 #FX10
 ifeq ($(SYSTEM),FX10)
@@ -15,8 +16,8 @@ endif
 
 #intel
 ifeq ($(SYSTEM),INTEL)
-#OPTFLAGS = -O3 -traceback -ip -heap-arrays -openmp
-OPTFLAGS = -openmp -O3 -ip
+#OPTFLAGS = -O3 -traceback -ip -heap-arrays -qopenmp
+OPTFLAGS = -qopenmp -O3 -ip
 CC=mpiicc
 F90=mpiifort
 CCFLAGS = $(OPTFLAGS)
@@ -40,22 +41,25 @@ endif
 #Tsubame
 SYSTEM = TSUBAME
 ifeq ($(SYSTEM),TSUBAME)
-OPTFLAGS = -openmp -O3 -ip
-CC=mpicc
-F90=mpif90
+#OPTFLAGS = -O3 -traceback -ip -heap-arrays -qopenmp
+#OPTFLAGS = -openmp -O3
+OPTFLAGS = -qopenmp -O3
+#CC=mpicc
+#F90=mpif90
+CC=mpiicc
+F90=mpiifort
 CCFLAGS = $(OPTFLAGS)
-F90FLAGS = $(OPTFLAGS) -fpp1
+F90FLAGS = $(OPTFLAGS) -fpp
+#F90FLAGS = $(OPTFLAGS) -fpp1 -check all
 LDFLAGS = -mkl
 #INCS+= -I/usr/apps.sp3/isv/intel/ParallelStudioXE/ClusterEdition/2016-Update3/compilers_and_libraries_2016.3.210/linux/compiler/include
 endif
 
-#CCFLAGS += -g
-#F90FLAGS += -g
 LINK=$(F90)
 
 OBJS = HACApK_FPGA.o \
-       m_bem-bb-fw-coordinate.o HACApK_lib.o bem-bb-template-SCM-0.4.1.o m_HACApK_calc_entry_ij.o \
-       m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.1.o \
+       HACApK_lib.o m_ppohBEM_user_func.o m_ppohBEM_matrix_element_ij.o m_HACApK_calc_entry_ij.o \
+       m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.2.o \
 
 # PaRSEC
 #CPP = mpiicpc
@@ -92,7 +96,7 @@ INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
 
 LIBS+= -L$(CUDA_DIR)/lib64 -lcublas -lcusparse -lcudart $(MAGMA_DIR)/lib/libmagma.a
 
-CCFLAGS += -DHAVE_MAGMA 
+CCFLAGS += -DHAVE_MAGMA
 F90FLAGS+= -DHAVE_MAGMA
 
 CCFLAGS += -DHAVE_MAGMA_BATCH
@@ -100,7 +104,9 @@ F90FLAGS+= -DHAVE_MAGMA_BATCH
 
 #CCFLAGS += -Wall -Wremarks -Wcheck
 
+
 TARGET=bem-bb-SCM.out
+
 .SUFFIXES: .o .c .f90
 
 $(TARGET): $(OBJS)
@@ -108,8 +114,6 @@ $(TARGET): $(OBJS)
 
 .c.o: *.c
 			$(CC) -c $(CCFLAGS) $(INCS) $<
-.cpp.o: *.c
-			$(CPP) -c $(CCFLAGS) $(INCS) $<
 .f90.o: *.f90
 			$(F90) -c $< $(F90FLAGS) $(INCS)
 clean:

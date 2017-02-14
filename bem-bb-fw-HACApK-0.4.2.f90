@@ -36,9 +36,13 @@
 !                    Yasuhito Takahashi, Masatoshi Kawai, Akihiro Ida>*
 !                                                                     *
 !=====================================================================*
+!C***********************************************************************
+!C  This file main program of Bem-BB,
+!C  corrected the 'IF' block for PPOHBEM_INT_PARA_FC on Jan. 2017
+!C  last modified by Akihiro Ida on Jan 2017,
+!C***********************************************************************
 !***ppohBEM_bem_bb_dense_mpi
 program ppohBEM_bem_bb_dense_mpi
-  use m_ppohBEM_coordinate
   use m_ppohBEM_bembb2hacapk
   implicit none
   include 'mpif.h'
@@ -182,7 +186,7 @@ program ppohBEM_bem_bb_dense_mpi
     lrtrn= bembb2hacapk(st_bemv, st_ctl, st_ppohBEM_np, ppohBEM_face2node,ppohBEM_dble_para_fc,ppohBEM_rhs,ppohBEM_sol,ppohBEM_tor, &
                         ppohBEM_int_para_fc,ppohBEM_nond,ppohBEM_nofc,ppohBEM_nond_on_face,ppohBEM_number_element_dof,&
                         ppohBEM_ndble_para_fc,ppohBEM_nint_para_fc)
-!  lrtrn=HACApK_finalize(st_ctl)
+  lrtrn=HACApK_finalize(st_ctl)
   
   call MPI_Barrier( comm, ierr )
   if(ierr.ne.0) then
@@ -481,6 +485,8 @@ contains
         if( ierr .ne. 0 ) then
           print*, 'Error: MPI_Bcast#14 !!!'
         endif
+      else
+        allocate( ppohBEM_int_para_fc(1,1), stat=ierr )
       endif
 
       if( ppohBEM_ndble_para_fc .gt. 0 ) then
@@ -499,6 +505,8 @@ contains
         if( ierr .ne. 0 ) then
           print*, 'Error: MPI_Bcast#15 !!!'
         endif
+      else
+        allocate( ppohBEM_dble_para_fc(1, 1),stat=ierr )
       endif
 
       close ( iunit )
@@ -553,6 +561,8 @@ contains
         if( ierr .ne. 0 ) then
           print*, 'Error: MPI_Bcast#24 !!!'
         endif
+      else
+        allocate( ppohBEM_int_para_fc(1,1), stat=ierr )
       endif
       if ( ppohBEM_ndble_para_fc .gt. 0 ) then
         allocate( ppohBEM_dble_para_fc(ppohBEM_ndble_para_fc, ppohBEM_nofc), & 
@@ -566,6 +576,8 @@ contains
         if( ierr .ne. 0 ) then
           print*, 'Error: MPI_Bcast#25 !!!'
         endif
+      else
+        allocate( ppohBEM_dble_para_fc(1, 1),stat=ierr )
       endif
     endif
 !    print*,'sub Read_model_data end'
@@ -624,9 +636,6 @@ contains
     logical ldense
 
 !    print*,'sub Make_equation_data start'
-    real*8, EXTERNAL ::   ppohBEM_matrix_element_ij
-    real*8, EXTERNAL ::   ppohBEM_right_hand_side_vector_element_i
-
 
     ndim = ppohBEM_nofc * ppohBEM_number_element_dof
 
@@ -1258,3 +1267,4 @@ contains
   end subroutine   !!!! subroutine dot_product
 
 end function ppohBEM_pbicgstab_dense
+
