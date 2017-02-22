@@ -352,6 +352,7 @@ end subroutine HACApK_bicgstab_lfmtx
 
 !***HACApK_bicgstab_cax_lfmtx_hyp
  subroutine HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+ use iso_fortran_env
  include 'mpif.h'
  type(st_HACApK_leafmtxp) :: st_leafmtxp
  type(st_HACApK_lcontrol) :: st_ctl
