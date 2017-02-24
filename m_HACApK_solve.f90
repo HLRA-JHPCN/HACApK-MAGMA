@@ -619,17 +619,17 @@ end subroutine HACApK_measurez_time_ax_lfmtx
 !***HACApK_measurez_time_ax_FPGA_lfmtx
 subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) bind(C)
  use, intrinsic ::  iso_c_binding
-!#ifdef HAVE_MAGMA
-! use cudafor
-!#endif
+#ifdef HAVE_MAGMA_PINNED
+ use cudafor
+#endif
  include 'mpif.h'
  type(st_HACApK_leafmtxp) :: st_leafmtxp
  type(st_HACApK_lcontrol) :: st_ctl
-!#ifdef HAVE_MAGMA
-! real*8,dimension(:),allocatable, pinned :: wws,wwr,u,v,b
-!#else
+#ifdef HAVE_MAGMA_PINNED
+ real*8,dimension(:),allocatable, pinned :: wws,wwr,u,v,b
+#else
  real*8,dimension(:),allocatable :: wws,wwr,u,v,b
-!#endif
+#endif
  integer*4 :: isct(2),irct(2)
  real*8,pointer :: param(:)
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
