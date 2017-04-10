@@ -147,7 +147,12 @@ contains
  ndnr_s=lpmd(6); ndnr_e=lpmd(7); ndnr=lpmd(5)
  zau(:nd)=0.0d0
 !$omp barrier
+#if defined(BICG_MAGMA_BATCH)
+ write(*,*) ' on CPU for now..'
  call HACApK_adot_body_lfmtx_hyp(zau,st_leafmtxp,st_ctl,zu,nd)
+#else
+ call HACApK_adot_body_lfmtx_hyp(zau,st_leafmtxp,st_ctl,zu,nd)
+#endif
 !$omp barrier
 !$omp master
  if(nrank>1)then
@@ -390,7 +395,7 @@ end subroutine HACApK_bicgstab_lfmtx
  if(mpinr==0) print*,' '
 #if defined(BICG_MAGMA_BATCH)
  if(mpinr==0) print*,' ** BICG with MAGMA batched **'
- call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
+! call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
 #elif defined(BICG_MAGMA)
  if(mpinr==0) print*,' ** BICG with BLAS (MAGMA or MKL) **'
  call c_HACApK_adot_body_lfcpy_gpu(nd,st_leafmtxp)
@@ -407,6 +412,7 @@ end subroutine HACApK_bicgstab_lfmtx
    zp(:nd) =zr(:nd)+beta*(zp(:nd)-zeta*zakp(:nd))
    zkp(:nd)=zp(:nd)
 !$omp end workshare
+!  .. SpMV ..
    call HACApK_adot_cax_lfmtx_hyp(zakp,st_leafmtxp,st_ctl,zkp,wws,wwr,isct,irct,nd)
 !$omp barrier
 !$omp single
@@ -439,7 +445,7 @@ end subroutine HACApK_bicgstab_lfmtx
  enddo
 !$omp end parallel
 #if defined(BICG_MAGMA_BATCH)
- call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
+! call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
 #elif defined(BICG_MAGMA)
  call c_HACApK_adot_body_lfdel_gpu(st_leafmtxp)
 #endif

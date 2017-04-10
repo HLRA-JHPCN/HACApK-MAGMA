@@ -209,6 +209,16 @@ contains
      ao(il)=1.0d0/zzz
    enddo
    
+#if defined(BICG_MAGMA_BATCH)
+   if(st_ctl%param(1)>0 .and. mpinr==0) then
+      if(param(85)==1)then
+        write(*,*) ' 1: HACApK_bicgstab_lfmtx_hyp'
+      else
+        write(*,*) ' 1: HACApK_gcrm_lfmtx'
+      endif
+   endif
+!   call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
+#endif
    call MPI_Barrier( icomm, ierr )
    st_measure_time_bicgstab=MPI_Wtime()
    if(param(85)==1)then
@@ -220,6 +230,9 @@ contains
    endif
    call MPI_Barrier( icomm, ierr )
    en_measure_time_bicgstab=MPI_Wtime()
+#if defined(BICG_MAGMA_BATCH)
+!   call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
+#endif
    time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
    if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000)              'time_HACApK_solve  =',time_bicgstab
    if(st_ctl%param(1)>0 .and. mpinr==0 .and. nstp>1)  write(6,2000) '       time_1step  =',time_bicgstab/nstp
@@ -271,6 +284,18 @@ contains
      ao(il)=1.0d0/zzz
    enddo
    
+#if defined(BICG_MAGMA_BATCH)
+   if(st_ctl%param(1)>0 .and. mpinr==0) then
+      if(param(85)==1)then
+        write(*,*)
+        write(*,*) ' 2: HACApK_bicgstab_cax_lfmtx_hyp'
+      else
+        write(*,*)
+        write(*,*) ' 2: HACApK_gcrm_lfmtx'
+      endif
+   endif
+   call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
+#endif
    call MPI_Barrier( icomm, ierr )
    st_measure_time_bicgstab=MPI_Wtime()
    if(param(85)==1)then
@@ -282,6 +307,9 @@ contains
    endif
    call MPI_Barrier( icomm, ierr )
    en_measure_time_bicgstab=MPI_Wtime()
+#if defined(BICG_MAGMA_BATCH)
+   call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
+#endif
    time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
    if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000)              'time_HACApK_solve  =',time_bicgstab
    if(st_ctl%param(1)>0 .and. mpinr==0 .and. nstp>1)  write(6,2000) '       time_1step  =',time_bicgstab/nstp

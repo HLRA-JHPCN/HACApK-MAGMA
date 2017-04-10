@@ -438,7 +438,6 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     double zero = 0.0;
 
     int ip;
-    int num_saved = 0, count = 0;
     int nlf = st_leafmtxp->nlf;
     int *saved_ip[2]; 
     saved_ip[0] = (int*)malloc( nlf * sizeof(int) ); 
@@ -454,74 +453,84 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     double * zau_batch = NULL;
     MPI_Barrier(MPI_COMM_WORLD);
     #ifdef PROF_MAGMA_BATCH
-    double tic = MPI_Wtime();
+    double time_copy = 0.0;
+    double time_batch = 0.0;
+    int ii, dgemv_count = 1;
     #endif
-    //#define ACCUME_ON_CPU
-    #if defined(ACCUME_ON_CPU)
-    magma_dmalloc_pinned( &zau_batch,  batch_count*(st_leafmtxp->max_block) );
-    #else
-    magma_dsetvector( st_leafmtxp->m, zau, 1, st_leafmtxp->zau_gpu[0], 1, queue );
-    #endif
-    magma_dsetvector( st_leafmtxp->gn,  zu, 1, st_leafmtxp->zu_gpu,  1, queue );
-
-    // start timer
-    #ifdef PROF_MAGMA_BATCH
-    double time_copy = MPI_Wtime()-tic;
-    tic = MPI_Wtime();
-    #endif
-
-    // parse all the blocks
-    int num_batch = 0;
-    #if defined(BATCH_IN_PLACE_Y)
-    // first part of low-rank, zbu := V'*zu
-    magmablas_dlaset( MagmaFull, st_leafmtxp->total_size_y, 1, zero, zero, 
-                      st_leafmtxp->zbu_gpu[0], st_leafmtxp->total_size_y, queue );
-    #endif
-    fflush(stdout);
-    for (ip = 0; ip < max(st_leafmtxp->num_batch, nlf) || num_saved > 0;) {
-        /**/
-        int ip_start = ip;
-        int batchCount = 0;
-
-        // call batched GEMV and non-blocking copy to CPU
-        c_hacapk_adot_body_lfmtx_batch_dgemv(st_leafmtxp, saved_ip,
-                                             &ip, num_batch, count,
-                                             &batchCount, &num_saved,
-                                             zau_batch, queue);
-        #if defined(ACCUME_ON_CPU)
-        magma_queue_sync( queue );
-        #endif
-
-        // accumulate the results of GEMVs
-        #if !defined(BATCH_IN_PLACE_Y)
-        c_hacapk_adot_body_lfmtx_batch_daxpy(st_leafmtxp, saved_ip,
-                                             num_batch, count, k_start, ip_start,
-                                             zau_batch, zau, queue);
-        #endif
-
+    for (ii=0; ii<dgemv_count; ii++) {
         #ifdef PROF_MAGMA_BATCH
-        if (st_leafmtxp->mpi_rank == 0) printf( " batchCount = %d, ip=%d:%d\n",batchCount,ip_start,ip_start+batchCount-1 );
+        double tic = MPI_Wtime();
         #endif
-        num_batch +=(1+ batchCount);
-        count ++;
+        int num_saved = 0, count = 0;
+        //#define ACCUME_ON_CPU
+        #if defined(ACCUME_ON_CPU)
+        magma_dmalloc_pinned( &zau_batch,  batch_count*(st_leafmtxp->max_block) );
+        #else
+        magma_dsetvector( st_leafmtxp->m, zau, 1, st_leafmtxp->zau_gpu[0], 1, queue );
+        #endif
+        magma_dsetvector( st_leafmtxp->gn,  zu, 1, st_leafmtxp->zu_gpu,  1, queue );
+
+        // start timer
+        #ifdef PROF_MAGMA_BATCH
+        time_copy += MPI_Wtime()-tic;
+        tic = MPI_Wtime();
+        #endif
+
+        // parse all the blocks
+        int num_batch = 0;
+        #if defined(BATCH_IN_PLACE_Y)
+        // first part of low-rank, zbu := V'*zu
+        magmablas_dlaset( MagmaFull, st_leafmtxp->total_size_y, 1, zero, zero, 
+                          st_leafmtxp->zbu_gpu[0], st_leafmtxp->total_size_y, queue );
+        #endif
+        fflush(stdout);
+        for (ip = 0; ip < max(st_leafmtxp->num_batch, nlf) || num_saved > 0;) {
+            /**/
+            int ip_start = ip;
+            int batchCount = 0;
+
+            // call batched GEMV and non-blocking copy to CPU
+            c_hacapk_adot_body_lfmtx_batch_dgemv(st_leafmtxp, saved_ip,
+                                                 &ip, num_batch, count,
+                                                 &batchCount, &num_saved,
+                                                 zau_batch, queue);
+            #if defined(ACCUME_ON_CPU)
+            magma_queue_sync( queue );
+            #endif
+
+            // accumulate the results of GEMVs
+            #if !defined(BATCH_IN_PLACE_Y)
+            c_hacapk_adot_body_lfmtx_batch_daxpy(st_leafmtxp, saved_ip,
+                                                 num_batch, count, k_start, ip_start,
+                                                 zau_batch, zau, queue);
+            #endif
+
+            #ifdef PROF_MAGMA_BATCH
+            if (st_leafmtxp->mpi_rank == 0) printf( " batchCount = %d, ip=%d:%d\n",batchCount,ip_start,ip_start+batchCount-1 );
+            #endif
+            num_batch +=(1+ batchCount);
+            count ++;
+        }
+        // stop timer
+        magma_queue_sync( queue );
+        #ifdef PROF_MAGMA_BATCH
+        time_batch += MPI_Wtime()-tic;
+        tic = MPI_Wtime();
+        #endif
+        #if defined(ACCUME_ON_CPU)
+        magma_free_pinned(zau_batch);
+        #else
+        magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue );
+        #endif
+        #ifdef PROF_MAGMA_BATCH
+        time_copy += MPI_Wtime()-tic;
+        #endif
     }
-    // stop timer
-    magma_queue_sync( queue );
     MPI_Barrier(MPI_COMM_WORLD);
     #ifdef PROF_MAGMA_BATCH
-    double time_batch = MPI_Wtime()-tic;
-    tic = MPI_Wtime();
-    #endif
-    #if defined(ACCUME_ON_CPU)
-    magma_free_pinned(zau_batch);
-    #else
-    magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue );
-    #endif
-    #ifdef PROF_MAGMA_BATCH
-    time_copy += MPI_Wtime()-tic;
     if (st_leafmtxp->mpi_rank == 0) {
-        printf( " time_copy : %.2e seconds\n",time_batch );
-        printf( " time_batch: %.2e seconds\n\n",time_copy );
+        printf( " time_copy : %.2e seconds\n",  time_copy /dgemv_count );
+        printf( " time_batch: %.2e seconds\n\n",time_batch/dgemv_count );
     }
     #endif
     fflush(stdout);
