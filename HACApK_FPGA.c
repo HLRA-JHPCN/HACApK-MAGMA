@@ -455,8 +455,8 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     #ifdef PROF_MAGMA_BATCH
     double time_copy = 0.0;
     double time_batch = 0.0;
-    int ii, dgemv_count = 1;
     #endif
+    int ii, dgemv_count = 1;
     for (ii=0; ii<dgemv_count; ii++) {
         #ifdef PROF_MAGMA_BATCH
         double tic = MPI_Wtime();
