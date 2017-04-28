@@ -81,7 +81,8 @@ contains
  end subroutine HACApK_adot_lfmtx_p
  
 !***HACApK_adot_cax_lfmtx_hyp
- subroutine HACApK_adot_cax_lfmtx_hyp(zau,st_leafmtxp,st_ctl,zu,wws,wwr,isct,irct,nd,time_spmv,time_mpi)
+ subroutine HACApK_adot_cax_lfmtx_hyp(zau,st_leafmtxp,st_ctl,zu,wws,wwr,isct,irct,nd, &
+                                      time_batch, time_copy, time_spmv, time_mpi)
  include 'mpif.h'
  type(st_HACApK_leafmtxp) :: st_leafmtxp
  type(st_HACApK_lcontrol) :: st_ctl
@@ -102,7 +103,7 @@ contains
  tic = MPI_Wtime()
 !!! call HACApK_adot_body_lfmtx_hyp(zau,st_leafmtxp,st_ctl,zu,nd)
 #if defined(BICG_MAGMA_BATCH)
-   call c_HACApK_adot_body_lfmtx_batch(zau,st_leafmtxp,zu,wws)
+   call c_HACApK_adot_body_lfmtx_batch(zau,st_leafmtxp,zu,wws, time_batch,time_copy)
 #elif defined(BICG_MAGMA)
    call c_HACApK_adot_body_lfmtx_gpu(zau,st_leafmtxp,zu,wws)
 #else
@@ -355,8 +356,7 @@ contains
 end subroutine HACApK_bicgstab_lfmtx
 
 !***HACApK_bicgstab_cax_lfmtx_hyp
- subroutine HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn, &
-                                          time_tot,time_spmv,time_mpi)
+ subroutine HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
  use iso_fortran_env
  include 'mpif.h'
  type(st_HACApK_leafmtxp) :: st_leafmtxp
@@ -367,31 +367,22 @@ end subroutine HACApK_bicgstab_lfmtx
  real*8,dimension(:),allocatable :: wws,wwr
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  integer*4 :: isct(2),irct(2)
- real*8 time_tot, time_spmv, time_mpi, tic
+ real*8 time_tot, time_spmv, time_mpi, time_batch, time_copy, tic
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
  lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;lthr(0:) => st_ctl%lthr
  mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1)
-   call MPI_Barrier( icomm, ierr )
-   st_measure_time=MPI_Wtime()
- if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_bicgstab_lfmtx_hyp start'
+ call MPI_Barrier( icomm, ierr )
  mstep=param(83)
  eps=param(91)
  allocate(wws(maxval(lnp(0:nrank-1))),wwr(maxval(lnp(0:nrank-1))))
  allocate(zr(nd),zshdw(nd),zp(nd),zt(nd),zkp(nd),zakp(nd),zkt(nd),zakt(nd))
  alpha = 0.0;  beta = 0.0;  zeta = 0.0;
  zz=HACApK_dotp_d(nd, b, b); bnorm=dsqrt(zz);
-!$omp parallel
-!$omp workshare
  zp(1:nd)=0.0d0; zakp(1:nd)=0.0d0
  zr(:nd)=b(:nd)
-!$omp end workshare
  call HACApK_adotsub_lfmtx_hyp(zr,zshdw,st_leafmtxp,st_ctl,u,wws,wwr,isct,irct,nd)
-!$omp barrier
-!$omp workshare
  zshdw(:nd)=zr(:nd)
-!$omp end workshare
-!$omp single
  zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
  if(mpinr==0) flush(output_unit)
  if(mpinr==0) print*,' '
@@ -407,57 +398,65 @@ end subroutine HACApK_bicgstab_lfmtx
  if(mpinr==0) print*,' '
  if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
  if(mpinr==0) flush(output_unit)
-!$omp end single
+ time_tot = 0.0 
+ time_spmv = 0.0 
+ time_mpi = 0.0 
+ time_batch = 0.0 
+ time_copy = 0.0
+ st_measure_time=MPI_Wtime()
+ if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_bicgstab_lfmtx_hyp start'
  do in=1,mstep
    if(zrnorm/bnorm<eps) exit
-!$omp workshare
-   zp(:nd) =zr(:nd)+beta*(zp(:nd)-zeta*zakp(:nd))
-   zkp(:nd)=zp(:nd)
-!$omp end workshare
+   zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
+   zkp(:nd) = zp(:nd)
 !  .. SpMV ..
    tic = MPI_Wtime()
    call HACApK_adot_cax_lfmtx_hyp(zakp,st_leafmtxp,st_ctl,zkp,wws,wwr,isct,irct,nd, &
-                                  time_spmv,time_mpi)
+                                  time_batch,time_copy,time_spmv,time_mpi)
    time_tot = time_tot + (MPI_Wtime()-tic)
-!$omp barrier
-!$omp single
-   znom=HACApK_dotp_d(nd,zshdw,zr); zden=HACApK_dotp_d(nd,zshdw,zakp);
-   alpha=znom/zden; znomold=znom;
-!$omp end single
-!$omp workshare
-   zt(:nd)=zr(:nd)-alpha*zakp(:nd)
-   zkt(:nd)=zt(:nd)
-!$omp end workshare
+   znom = HACApK_dotp_d(nd,zshdw,zr); zden=HACApK_dotp_d(nd,zshdw,zakp);
+   alpha = znom/zden; 
+   znomold = znom;
+   zt(:nd) = zr(:nd) - alpha*zakp(:nd)
+   zkt(:nd) = zt(:nd)
    tic = MPI_Wtime()
    !call HACApK_adot_lfmtx_hyp   (zakt,st_leafmtxp,st_ctl,zkt,wws,wwr,isct,irct,nd)
    call HACApK_adot_cax_lfmtx_hyp(zakt,st_leafmtxp,st_ctl,zkt,wws,wwr,isct,irct,nd, &
-                                  time_spmv,time_mpi)
+                                  time_batch,time_copy,time_spmv,time_mpi)
    time_tot = time_tot + (MPI_Wtime()-tic)
-!$omp barrier
-!$omp single
-   znom=HACApK_dotp_d(nd,zakt,zt); zden=HACApK_dotp_d(nd,zakt,zakt);
-   zeta=znom/zden;
-!$omp end single
-!$omp workshare
-   u(:nd)=u(:nd)+alpha*zkp(:nd)+zeta*zkt(:nd)
-   zr(:nd)=zt(:nd)-zeta*zakt(:nd)
-!$omp end workshare
-!$omp single
-   beta=alpha/zeta*HACApK_dotp_d(nd,zshdw,zr)/znomold;
-   zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
-   nstp=in
+   znom = HACApK_dotp_d(nd,zakt,zt); zden=HACApK_dotp_d(nd,zakt,zakt);
+   zeta = znom/zden;
+   u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
+   zr(:nd) = zt(:nd) - zeta*zakt(:nd)
+   beta = alpha/zeta * HACApK_dotp_d(nd,zshdw,zr)/znomold;
+   zrnorm = HACApK_dotp_d(nd,zr,zr);
+   zrnorm = dsqrt(zrnorm)
+   nstp = in
    call MPI_Barrier( icomm, ierr )
-   en_measure_time=MPI_Wtime()
+   en_measure_time = MPI_Wtime()
    time = en_measure_time - st_measure_time
-   if(st_ctl%param(1)>0 .and. mpinr==0) print*,in,time,log10(zrnorm/bnorm)
-!$omp end single
+ 2002 format(i,a,1pe8.1,a,1pe8.1)
+   if(st_ctl%param(1)>0 .and. mpinr==0) write(6,2002) in,': time=',time,', log10(zrnorm/bnorm)=',log10(zrnorm/bnorm)
  enddo
-!$omp end parallel
 #if defined(BICG_MAGMA_BATCH)
 ! call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
 #elif defined(BICG_MAGMA)
  call c_HACApK_adot_body_lfdel_gpu(st_leafmtxp)
 #endif
+ 2001 format(5(a,1pe15.8)/)
+ 2003 format(5(a,i,a,1pe9.2)/)
+ en_measure_time = MPI_Wtime()
+ time = en_measure_time - st_measure_time
+ if(st_ctl%param(1)>0)  write(6,2003) ' End: ',mpinr,' ',time
+ call MPI_Barrier( icomm, ierr )
+ en_measure_time = MPI_Wtime()
+ time = en_measure_time - st_measure_time
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '      BiCG         =',time
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_tot   =',time_tot
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_mpi   =',time_mpi
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_spmv  =',time_spmv
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_copy  =',time_copy
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_hyp
 
 !***HACApK_bicgstab_lfmtx_hyp
@@ -657,6 +656,7 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
  character(len=50) :: ErrFormat
  pointer (a1pt, tmptmpa1)
  integer*8 :: stpt2, a2pt
+ real*8 time_copy, time_batch
 !!!
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
@@ -717,9 +717,11 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
 !
 #ifdef HAVE_MAGMA_BATCH
    v(:)=1.0; b(:)=1.0
+   time_batch = 0.0
+   time_copy = 0.0
 !   call c_HACApK_adot_body_lfcpy_batch(st_leafmtxp)
    call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
-   call c_HACApK_adot_body_lfmtx_batch(v,st_leafmtxp,b,wws)
+   call c_HACApK_adot_body_lfmtx_batch(v,st_leafmtxp,b,wws,time_batch,time_copy)
    call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
    unorm = 0.0
    do ii=1,st_leafmtxp%m
@@ -746,7 +748,7 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
    call c_HACApK_PaRSEC(1,1,u,st_leafmtxp,b,wws)
 #endif
  enddo
- print*,'c_HACApK_adot_body_lfmtx end'
+ if (st_leafmtxp%mpi_rank == 0) print*,'c_HACApK_adot_body_lfmtx end'
  deallocate(wws)
 end subroutine HACApK_measurez_time_ax_FPGA_lfmtx
 

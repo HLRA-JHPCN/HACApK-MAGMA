@@ -433,7 +433,8 @@ int c_hacapk_adot_body_lfmtx_batch_daxpy(stc_HACApK_leafmtxp *st_leafmtxp, int *
                                          int num_batch, int count, int k_start, int ip_start,
                                          double* zau_batch, double* zau, magma_queue_t queue);
 
-void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu) {
+void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+                                     double *time_batch, double *time_copy) {
     // constants
     double zero = 0.0;
 
@@ -451,10 +452,10 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
 
     // copy the input vector to GPU
     double * zau_batch = NULL;
-    MPI_Barrier(MPI_COMM_WORLD);
+    //MPI_Barrier(MPI_COMM_WORLD);
     #ifdef PROF_MAGMA_BATCH
-    double time_copy = 0.0;
-    double time_batch = 0.0;
+    //double time_copy = 0.0;
+    //double time_batch = 0.0;
     #endif
     int ii, dgemv_count = 1;
     for (ii=0; ii<dgemv_count; ii++) {
@@ -472,7 +473,7 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
 
         // start timer
         #ifdef PROF_MAGMA_BATCH
-        time_copy += MPI_Wtime()-tic;
+        *time_copy += MPI_Wtime()-tic;
         tic = MPI_Wtime();
         #endif
 
@@ -505,7 +506,7 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
                                                  zau_batch, zau, queue);
             #endif
 
-            #ifdef PROF_MAGMA_BATCH
+            #ifdef PROF_MAGMA_BATCH_COUNT
             if (st_leafmtxp->mpi_rank == 0) printf( " batchCount = %d, ip=%d:%d\n",batchCount,ip_start,ip_start+batchCount-1 );
             #endif
             num_batch +=(1+ batchCount);
@@ -514,7 +515,7 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
         // stop timer
         magma_queue_sync( queue );
         #ifdef PROF_MAGMA_BATCH
-        time_batch += MPI_Wtime()-tic;
+        *time_batch += MPI_Wtime()-tic;
         tic = MPI_Wtime();
         #endif
         #if defined(ACCUME_ON_CPU)
@@ -523,17 +524,17 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
         magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue );
         #endif
         #ifdef PROF_MAGMA_BATCH
-        time_copy += MPI_Wtime()-tic;
+        *time_copy += MPI_Wtime()-tic;
         #endif
     }
-    MPI_Barrier(MPI_COMM_WORLD);
-    #ifdef PROF_MAGMA_BATCH
+    //MPI_Barrier(MPI_COMM_WORLD);
+    #ifdef PROF_MAGMA_BATCH_COUNT
     if (st_leafmtxp->mpi_rank == 0) {
-        printf( " time_copy : %.2e seconds\n",  time_copy /dgemv_count );
-        printf( " time_batch: %.2e seconds\n\n",time_batch/dgemv_count );
+        printf( " time_copy : %.2e seconds\n",  *time_copy /dgemv_count );
+        printf( " time_batch: %.2e seconds\n\n",*time_batch/dgemv_count );
     }
-    #endif
     fflush(stdout);
+    #endif
 
     free(saved_ip[0]);
     free(saved_ip[1]);
@@ -884,7 +885,10 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     int count = 0;
     //#define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
-    FILE *fp = fopen("sizes.dat","w");
+    FILE *fp;
+    char filename[100];
+    sprintf(filename,"sizes_%d.dat",st_leafmtxp->mpi_rank);
+    fp = fopen(filename,"w");
     #endif
     for (ip = 0; ip < nlf || num_saved > 0;) {
         /**/
@@ -1116,6 +1120,33 @@ int hacapk_size_sorter(const void* arg1,const void* arg2) {
   #else
   // sort by m
   return (val2[1] < val1[1]);
+  #endif
+}
+
+int hacapk_size_sorter_trans(const void* arg1,const void* arg2) {
+  const int *val1 = (const int*)arg1;
+  const int *val2 = (const int*)arg2;
+
+  #if defined(BY_N)
+    #if defined(BY_GROUP)
+    // sort by "group", whithin group, sort by m
+    const int id1 = (val1[1]-1)/sort_group_size;
+    const int id2 = (val2[1]-1)/sort_group_size;
+    return (id1 == id2 ? (val2[1] < val1[1]) : id2 < id1);
+    #else
+    // sort by m
+    return (val2[1] < val1[1]);
+    #endif
+  #else
+    #if defined(BY_GROUP)
+    // sort by "group", whithin group, sort by m
+    const int id1 = (val1[2]-1)/sort_group_size;
+    const int id2 = (val2[2]-1)/sort_group_size;
+    return (id1 == id2 ? (val2[2] < val1[2]) : id2 < id1);
+    #else
+    // sort by n
+    return (val2[2] < val1[2]);
+    #endif
   #endif
 }
 
@@ -1366,7 +1397,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #if defined(SORT_BATCH_BY_SIZES)
     #if defined(USE_QSORT)
     qsort( sizes, nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
-    qsort( &sizes[nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
+    qsort( &sizes[sort_array_size*nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter_trans );
+    //qsort( &sizes[sort_array_size*nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
     #else
     hacapk_sort(nlf, sizes);
     hacapk_sort(num_batch-nlf, &sizes[nlf]);
@@ -1374,7 +1406,10 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #endif
     st_leafmtxp->batch_order = (int*)malloc(num_batch * sizeof(int));
     #ifdef OUTPUT_SIZES
-    FILE *fp = fopen( "sizes_sorted.dat","w");
+    FILE *fp;
+    char filename[100];
+    sprintf(filename,"sizes_sorted_%d.dat",st_leafmtxp->mpi_rank);
+    fp = fopen(filename,"w");
     fprintf(fp, "%d\n",num_batch);
     #endif
     for (ip = 0; ip < num_batch; ip++) {
@@ -1710,8 +1745,10 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                 num_batch ++;
             }
         }
-if (max_M[count] != max_m) printf( " max_M[%d]=%d, max_m=%d\n",count,max_M[count],max_m );
-if (max_N[count] != max_n) printf( " max_N[%d]=%d, max_n=%d\n",count,max_N[count],max_n );
+        #ifdef PAD_FOR_FIXED_SIZE_BATCH
+        if (max_M[count] != max_m) printf( " max_M[%d]=%d, max_m=%d\n",count,max_M[count],max_m );
+        if (max_N[count] != max_n) printf( " max_N[%d]=%d, max_n=%d\n",count,max_N[count],max_n );
+        #endif
         max_M[count] = h_M[num_batch] = max_m;
         max_N[count] = h_N[num_batch] = max_n;
         count ++;
