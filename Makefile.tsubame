@@ -89,8 +89,8 @@ OBJS = HACApK_FPGA.o \
 
 
 # MAGMA
-CUDA_DIR  = /usr/apps.sp3/cuda/7.5
-MAGMA_DIR = /home/usr2/16IH0462/magma/release/magma-2.2.0
+CUDA_DIR  ?= /usr/apps.sp3/cuda/7.5
+MAGMA_DIR ?= /home/usr2/16IH0462/magma/release/magma-2.2.0
 
 INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
 
