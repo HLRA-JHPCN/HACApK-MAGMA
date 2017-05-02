@@ -389,6 +389,7 @@ void  c_hacapk_adot_body_lfdel_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
 
 #if defined(HAVE_MAGMA_BATCH)
 #define batch_count 10000
+//#define batch_count 1000
 //#define batch_count 1
 #define batch_pad 32
 #define MAGMA_BATCH_DGEMV_ATOMIC
@@ -396,6 +397,8 @@ void  c_hacapk_adot_body_lfdel_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
 #define SORT_BATCH_BY_SIZES
 #define USE_QSORT
 #define gpus_per_proc 3
+#define batch_max_blocksize 10000000 
+//#define batch_max_blocksize 1000 
 
 void magma_iprint( magma_int_t m, magma_int_t n,
                    magma_int_t *A, magma_int_t lda ) {
@@ -434,15 +437,17 @@ int c_hacapk_adot_body_lfmtx_batch_daxpy(stc_HACApK_leafmtxp *st_leafmtxp, int *
                                          double* zau_batch, double* zau, magma_queue_t queue);
 
 void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
-                                     double *time_batch, double *time_copy) {
+                                     double *time_batch, double *time_set, double *time_copy) {
     // constants
     double zero = 0.0;
 
     int ip;
     int nlf = st_leafmtxp->nlf;
     int *saved_ip[2]; 
-    saved_ip[0] = (int*)malloc( nlf * sizeof(int) ); 
-    saved_ip[1] = (int*)malloc( nlf * sizeof(int) ); 
+    if (st_leafmtxp->batch_order == NULL) {
+        saved_ip[0] = (int*)malloc( nlf * sizeof(int) ); 
+        saved_ip[1] = (int*)malloc( nlf * sizeof(int) ); 
+    }
 
     // allocate queue
     magma_device_t cdev;
@@ -483,18 +488,32 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
         // first part of low-rank, zbu := V'*zu
         magmablas_dlaset( MagmaFull, st_leafmtxp->total_size_y, 1, zero, zero, 
                           st_leafmtxp->zbu_gpu[0], st_leafmtxp->total_size_y, queue );
+        *time_set += MPI_Wtime()-tic;
+        tic = MPI_Wtime();
         #endif
         fflush(stdout);
         for (ip = 0; ip < max(st_leafmtxp->num_batch, nlf) || num_saved > 0;) {
             /**/
             int ip_start = ip;
+            int num_start = num_batch - (ip < nlf ? 0 : st_leafmtxp->num_streamed);
             int batchCount = 0;
 
             // call batched GEMV and non-blocking copy to CPU
+            //#define PROF_MAGMA_BATCH_COUNT_2
+            #ifdef PROF_MAGMA_BATCH_COUNT_2
+            magma_queue_sync( queue );
+            double time_start = MPI_Wtime();
+            #endif
             c_hacapk_adot_body_lfmtx_batch_dgemv(st_leafmtxp, saved_ip,
-                                                 &ip, num_batch, count,
+                                                 &ip, num_start, count,
                                                  &batchCount, &num_saved,
                                                  zau_batch, queue);
+            #ifdef PROF_MAGMA_BATCH_COUNT_2
+            magma_queue_sync( queue );
+            if (st_leafmtxp->mpi_rank == 0) {
+                printf( " %d: time_dgemv_once : %.2e seconds\n", count,MPI_Wtime()-time_start );
+            }
+            #endif
             #if defined(ACCUME_ON_CPU)
             magma_queue_sync( queue );
             #endif
@@ -506,11 +525,41 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
                                                  zau_batch, zau, queue);
             #endif
 
-            #ifdef PROF_MAGMA_BATCH_COUNT
+            //#define PROF_MAGMA_BATCH_COUNT_1
+            #ifdef PROF_MAGMA_BATCH_COUNT_1
             if (st_leafmtxp->mpi_rank == 0) printf( " batchCount = %d, ip=%d:%d\n",batchCount,ip_start,ip_start+batchCount-1 );
             #endif
             num_batch +=(1+ batchCount);
             count ++;
+            // standard GEMV for large full/V-matrix
+            if (num_batch == (nlf+count)-st_leafmtxp->num_streamed) {
+                // streamed GEMV
+                int jj;
+                double one  = 1.0;
+                for (jj=0; jj<st_leafmtxp->num_streamed; jj++) {
+                    magmablas_dgemv( MagmaNoTrans, 
+                                     st_leafmtxp->h_M_streamed[jj], st_leafmtxp->h_N_streamed[jj],
+                                     one, st_leafmtxp->h_A_array_streamed[jj], st_leafmtxp->h_lda_streamed[jj],
+                                          st_leafmtxp->h_X_array_streamed[jj], 1,
+                                     one, st_leafmtxp->h_Y_array_streamed[jj], 1, queue );
+                }
+                num_batch += st_leafmtxp->num_streamed;
+                ip += st_leafmtxp->num_streamed;
+            }
+            // standard GEMV for large U-matrix
+            if (num_batch == (st_leafmtxp->num_batch+count)-st_leafmtxp->num_streamed_t) {
+                int jj;
+                double one  = 1.0;
+                for (jj=st_leafmtxp->num_streamed; jj<st_leafmtxp->num_streamed+st_leafmtxp->num_streamed_t; jj++) {
+                    magmablas_dgemv( MagmaNoTrans, 
+                                     st_leafmtxp->h_M_streamed[jj], st_leafmtxp->h_N_streamed[jj],
+                                     one, st_leafmtxp->h_A_array_streamed[jj], st_leafmtxp->h_lda_streamed[jj],
+                                          st_leafmtxp->h_X_array_streamed[jj], 1,
+                                     one, st_leafmtxp->h_Y_array_streamed[jj], 1, queue );
+                }
+                num_batch += st_leafmtxp->num_streamed_t;
+                ip += st_leafmtxp->num_streamed_t;
+            }
         }
         // stop timer
         magma_queue_sync( queue );
@@ -528,17 +577,20 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
         #endif
     }
     //MPI_Barrier(MPI_COMM_WORLD);
+    #define PROF_MAGMA_BATCH_COUNT
     #ifdef PROF_MAGMA_BATCH_COUNT
     if (st_leafmtxp->mpi_rank == 0) {
         printf( " time_copy : %.2e seconds\n",  *time_copy /dgemv_count );
+        printf( " time_set  : %.2e seconds\n",  *time_set  /dgemv_count );
         printf( " time_batch: %.2e seconds\n\n",*time_batch/dgemv_count );
     }
     fflush(stdout);
     #endif
 
-    free(saved_ip[0]);
-    free(saved_ip[1]);
-
+    if (st_leafmtxp->batch_order == NULL) {
+        free(saved_ip[0]);
+        free(saved_ip[1]);
+    }
     magma_queue_destroy( queue );
 }
 
@@ -560,20 +612,21 @@ int c_hacapk_adot_body_lfmtx_batch_dgemv(stc_HACApK_leafmtxp *st_leafmtxp, int *
     int k, ip;
     int k_start;
     int nlf = st_leafmtxp->nlf;
-    int st_lf_stride = st_leafmtxp->st_lf_stride;
 
     if (st_leafmtxp->batch_order != NULL) {
         *num_saved = 0;
         if (*ip_start < nlf) {
-            *batchCount = min(batch_count, nlf-(*ip_start));
+            *batchCount = min(batch_count, (nlf-st_leafmtxp->num_streamed)-(*ip_start));
         } else {
-            *batchCount = min(batch_count, (st_leafmtxp->num_batch)-(*ip_start));
+            *batchCount = min(batch_count, (st_leafmtxp->num_batch-st_leafmtxp->num_streamed_t)-(*ip_start));
         }
         ip = (*ip_start) + (*batchCount);
     } else {
         k_start = *num_saved;
         *batchCount = k_start;
         *num_saved = 0;
+
+        int st_lf_stride = st_leafmtxp->st_lf_stride;
         for (k = k_start, ip = *ip_start; k < batch_count && ip < nlf; ip++, k++) {
             /**/
             stc_HACApK_leafmtx *sttmp;
@@ -603,6 +656,13 @@ int c_hacapk_adot_body_lfmtx_batch_dgemv(stc_HACApK_leafmtxp *st_leafmtxp, int *
                                            &d_Y_array[num_batch], &d_inc[num_batch],
                                       *batchCount, st_leafmtxp->max_M[count], st_leafmtxp->max_N[count],
                                       queue);
+      /*magmablas_dgemv_vbatched_max_nocheck(
+                                      st_leafmtxp->transA, &d_M[num_batch], &d_N[num_batch],
+                                      one, &d_A_array[num_batch], &d_lda[num_batch],
+                                           &d_X_array[num_batch], &d_inc[num_batch],
+                                      one, &d_Y_array[num_batch], &d_inc[num_batch],
+                                      *batchCount, st_leafmtxp->max_M[count], st_leafmtxp->max_N[count],
+                                      queue);*/
       #else
       // beta is one
       //magmablas_dgemv_vbatched_atomic
@@ -642,6 +702,7 @@ int c_hacapk_adot_body_lfmtx_batch_dgemv(stc_HACApK_leafmtxp *st_leafmtxp, int *
     for (k = 0; k < k_start; k++) {
         int batch_id = (count-1)%2;
         int iip = saved_ip[batch_id][k];
+        int st_lf_stride = st_leafmtxp->st_lf_stride;
 
         /**/
         stc_HACApK_leafmtx *sttmp;
@@ -653,6 +714,7 @@ int c_hacapk_adot_body_lfmtx_batch_dgemv(stc_HACApK_leafmtxp *st_leafmtxp, int *
         size_y += ndl;
     }
     for (k = k_start, ip = *ip_start; k < batch_count && ip < nlf; ip++, k++) {
+        int st_lf_stride = st_leafmtxp->st_lf_stride;
         /**/
         stc_HACApK_leafmtx *sttmp;
         sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
@@ -1097,6 +1159,14 @@ void  c_hacapk_adot_body_lfdel_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     magma_free_cpu(st_leafmtxp->h_A_array);
     magma_free_cpu(st_leafmtxp->h_X_array);
     magma_free_cpu(st_leafmtxp->h_Y_array);
+    if (st_leafmtxp->num_streamed > 0) {
+        magma_free_cpu(st_leafmtxp->h_M_streamed);
+        magma_free_cpu(st_leafmtxp->h_N_streamed);
+        magma_free_cpu(st_leafmtxp->h_lda_streamed);
+        magma_free_cpu(st_leafmtxp->h_A_array_streamed);
+        magma_free_cpu(st_leafmtxp->h_X_array_streamed);
+        magma_free_cpu(st_leafmtxp->h_Y_array_streamed);
+    }
     // let me finalize it here for now
     magma_finalize();
 }
@@ -1194,6 +1264,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     magma_setdevice( get_device_id(st_leafmtxp) );
     magma_getdevice( &cdev );
     magma_queue_create( cdev, &queue );
+    //printf( " processor %d uses %d GPU\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%gpus_per_proc);
 
     // number of blocks
     nlf = st_leafmtxp->nlf; 
@@ -1280,7 +1351,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
         st_leafmtxp->zau_gpu = (double**)malloc( sizeof(double*) );
         int retval = magma_malloc( (void**) &st_leafmtxp->zau_gpu[0], (st_leafmtxp->m)*sizeof(double) );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for zau_gpu\n");
+            fprintf( stderr, "!!!! magma_malloc failed for zau_gpu (m=%d)\n",st_leafmtxp->m);
             exit(0);
         }
     }
@@ -1335,6 +1406,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     magma_imalloc_cpu(&max_N, count);
 
     // sort batch
+    int num_streamed = 0;
+    int num_streamed_t = 0;
     int lwork = 0;
     int *sizes = (int*)malloc( sort_array_size*num_batch * sizeof(int) );
     for (ip = 0; ip < nlf; ip++) {
@@ -1357,6 +1430,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             sizes[sort_array_size*ip + 3] = (ndt-1) / sort_group_size;
             #endif
             lwork = max(lwork, ndt*kt);
+            if (max(ndt, kt) > batch_max_blocksize) {
+                num_streamed ++;
+            }
         } else if(sttmp->ltmtx == 2) { // full
             // dimension
             sizes[sort_array_size*ip + 0] = ip;
@@ -1368,6 +1444,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             sizes[sort_array_size*ip + 3] = (ndt-1) / sort_group_size;
             #endif
             lwork = max(lwork, ndt*ndl);
+            if (max(ndt, ndl) > batch_max_blocksize) {
+                num_streamed ++;
+            }
         }
     }
     num_batch = nlf;
@@ -1392,8 +1471,16 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             #endif
             num_batch ++;
             lwork = max(lwork, kt*ndl);
+            if (max(kt, ndl) > batch_max_blocksize) {
+                num_streamed_t ++;
+                num_streamed ++;
+            }
         }
     }
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( "\n\n ++ num_batch=%d (this include num_streamed), num_streamed=%d,%d ++\n\n",num_batch,num_streamed,num_streamed_t );
+    }
+
     #if defined(SORT_BATCH_BY_SIZES)
     #if defined(USE_QSORT)
     qsort( sizes, nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
@@ -1423,6 +1510,20 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #endif
     free(sizes);
 
+    // space for streamed GEMV
+    double **h_A_array_streamed, **h_X_array_streamed, **h_Y_array_streamed;
+    magma_int_t *h_M_streamed, *h_N_streamed, *h_lda_streamed;
+    if (num_streamed > 0) {
+        magma_malloc_cpu((void**)&(h_A_array_streamed), num_streamed*sizeof(double*));
+        magma_malloc_cpu((void**)&(h_X_array_streamed), num_streamed*sizeof(double*));
+        magma_malloc_cpu((void**)&(h_Y_array_streamed), num_streamed*sizeof(double*));
+
+        magma_imalloc_cpu(&h_M_streamed, num_streamed);
+        magma_imalloc_cpu(&h_N_streamed, num_streamed);
+        magma_imalloc_cpu(&h_lda_streamed, num_streamed);
+    }
+    num_streamed = 0;
+
     int tp;
     //#define PAD_FOR_FIXED_SIZE_BATCH
     #ifdef PAD_FOR_FIXED_SIZE_BATCH
@@ -1443,19 +1544,24 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
         /**/
 
         if (sttmp->ltmtx == 1) { // compressed
-            Max_N = max(Max_N, max_N[count]);
+            if (max(kt, ndt) > batch_max_blocksize) {
+                Max_N = max(Max_N, max_N[count]);
 
-            max_M[count] = max(max_M[count], kt);
-            max_N[count] = max(max_N[count], ndt);
-            count_comp ++;
+                max_M[count] = max(max_M[count], kt);
+                max_N[count] = max(max_N[count], ndt);
+                count_comp ++;
+                count_ ++;
+            }
         } else if(sttmp->ltmtx == 2) { // full
-            Max_M = max(Max_M, max_M[count]);
-            Max_N = max(Max_N, max_N[count]);
+            if (max(ndl, ndt) > batch_max_blocksize) {
+                Max_M = max(Max_M, max_M[count]);
+                Max_N = max(Max_N, max_N[count]);
 
-            max_M[count] = max(max_M[count], ndl);
-            max_N[count] = max(max_N[count], ndt);
+                max_M[count] = max(max_M[count], ndl);
+                max_N[count] = max(max_N[count], ndt);
+                count_ ++;
+            }
         }
-        count_ ++;
         if (count_ == batch_count && count+1 < max_count) {
             total_size_a += count_ * max_M[count]*max_N[count];
             total_size_y += count_comp * max_M[count];
@@ -1488,12 +1594,14 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
         /**/
 
         if (sttmp->ltmtx == 1) { // compressed
-            Max_M = max(Max_M, max_M[count]);
+            if (max(ndl, kt) > batch_max_blocksize) {
+                Max_M = max(Max_M, max_M[count]);
 
-            max_M[count] = max(max_M[count], ndl);
-            max_N[count] = max(max_N[count], kt);
+                max_M[count] = max(max_M[count], ndl);
+                max_N[count] = max(max_N[count], kt);
+                count_ ++;
+            }
         }
-        count_ ++;
         if (count_ == batch_count && count+1 < max_count) {
             total_size_a += count_ * max_M[count]*max_N[count];
 
@@ -1551,19 +1659,17 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #endif
 
     // parse all the blocks
-    int tot_batch = num_batch;
     double *work = (double*)malloc(lwork * sizeof(double));
     total_size_y = 0;
     total_size_a = 0;
     num_batch = 0;
     count = 0;
-    //for (tp = 0; tp < tot_batch;) {
     for (tp = 0; tp < st_leafmtxp->num_batch;) {
         /**/
         int tp_start = tp;
         int max_m = 0;
         int max_n = 0;
-        for (k = 0; k < batch_count && tp < (tp_start < nlf ? nlf : tot_batch); tp++, k++) {
+        for (k = 0; k < batch_count && tp < (tp_start < nlf ? nlf : st_leafmtxp->num_batch); tp++, k++) {
             ip = st_leafmtxp->batch_order[tp];
             /**/
             stc_HACApK_leafmtx *sttmp;
@@ -1607,37 +1713,62 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                         max_n = max(max_n, ndt);
                     }
                     lda = magma_roundup( h_M[num_batch], batch_pad );
-                    h_A_array[num_batch] = &dA[total_size_a];
                     #ifdef PAD_FOR_FIXED_SIZE_BATCH
                     double zero = 0.0;
                     magmablas_dlaset( MagmaFull, h_M[num_batch], h_N[num_batch], zero, zero, 
-                                      h_A_array[num_batch], lda, queue );
+                                      &dA[total_size_a], lda, queue );
                     #endif
 
                     if (st_leafmtxp->transA == MagmaTrans) {
                         // copy V
-                        magma_dsetmatrix( ndt, kt, sttmp->a1, ndt, h_A_array[num_batch], lda, queue );
+                        magma_dsetmatrix( ndt, kt, sttmp->a1, ndt, &dA[total_size_a], lda, queue );
                     } else {
                         // copy V^T
                         for (i=0; i<ndt; i++) {
                             for (j=0; j<kt; j++) work[j + i*kt] = (sttmp->a1)[i + j*ndt];
                         }
-                        magma_dsetmatrix( kt, ndt, work, kt, h_A_array[num_batch], lda, queue );
+                        magma_dsetmatrix( kt, ndt, work, kt, &dA[total_size_a], lda, queue );
                     }
-                    total_size_a += lda*h_N[num_batch];
 
-                    // pointer to input, zu
-                    h_X_array[num_batch] = &st_leafmtxp->zu_gpu[nstrtt-1];
+                    if (max(ndt, kt) > batch_max_blocksize) {
+                        // dimension,
+                        h_M_streamed[num_streamed] = h_M[num_batch];
+                        h_N_streamed[num_streamed] = h_N[num_batch];
+                        //printf( " %d: compress-1(%d): %dx%d at (%d,%d)\n",ip,num_streamed,h_M_streamed[num_streamed],h_N_streamed[num_streamed],nstrtl,nstrtt);
 
-                    // pointer to output, y
-                    h_Y_array[num_batch] = &st_leafmtxp->zbu_gpu[0][total_size_y];
-                    saved_sz[ip] = total_size_y;
-                    total_size_y += kt;
+                        // pointer to input, A
+                        h_A_array_streamed[num_streamed] = &dA[total_size_a];
+                        total_size_a += lda*h_N_streamed[num_streamed];
 
-                    // ld and inc
-                    h_lda[num_batch] = lda;
-                    h_inc[num_batch] = 1;
-                    num_batch ++;
+                        // pointer to input, zu
+                        h_X_array_streamed[num_streamed] = &st_leafmtxp->zu_gpu[nstrtt-1];
+
+                        // pointer to output, y
+                        h_Y_array_streamed[num_streamed] = &st_leafmtxp->zbu_gpu[0][total_size_y];
+                        saved_sz[ip] = total_size_y;
+                        total_size_y += kt;
+
+                        // ld and inc
+                        h_lda_streamed[num_streamed] = lda;
+                        num_streamed ++;
+                    } else {
+                        // pointer to input, A
+                        h_A_array[num_batch] = &dA[total_size_a];
+                        total_size_a += lda*h_N[num_batch];
+
+                        // pointer to input, zu
+                        h_X_array[num_batch] = &st_leafmtxp->zu_gpu[nstrtt-1];
+
+                        // pointer to output, y
+                        h_Y_array[num_batch] = &st_leafmtxp->zbu_gpu[0][total_size_y];
+                        saved_sz[ip] = total_size_y;
+                        total_size_y += kt;
+
+                        // ld and inc
+                        h_lda[num_batch] = lda;
+                        h_inc[num_batch] = 1;
+                        num_batch ++;
+                    }
                 } else {
                     /**/
                     double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
@@ -1670,11 +1801,10 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                         max_n = max(max_n, kt);
                     }
                     lda = magma_roundup( h_M[num_batch], batch_pad );
-                    h_A_array[num_batch] = &dA[total_size_a];
                     #ifdef PAD_FOR_FIXED_SIZE_BATCHx
                     double zero = 0.0;
                     magmablas_dlaset( MagmaFull, h_M[num_batch], h_N[num_batch], zero, zero, 
-                                      h_A_array[num_batch], lda, queue );
+                                      &dA[total_size_a], lda, queue );
                     #endif
 
                     if (st_leafmtxp->transA == MagmaTrans) {
@@ -1682,24 +1812,49 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                         for (i=0; i<ndl; i++) {
                             for (j=0; j<kt; j++) work[j + i*kt] = a2tmp[i + j*ndl];
                         }
-                        magma_dsetmatrix( kt, ndl, work, kt, h_A_array[num_batch], lda, queue );
+                        magma_dsetmatrix( kt, ndl, work, kt, &dA[total_size_a], lda, queue );
                     } else {
                         // copy U
-                        magma_dsetmatrix( ndl, kt, a2tmp, ndl, h_A_array[num_batch], lda, queue );
+                        magma_dsetmatrix( ndl, kt, a2tmp, ndl, &dA[total_size_a], lda, queue );
                     }
-                    total_size_a += lda*h_N[num_batch];
 
-                    // pointer to input, zu
-                    int size_y = saved_sz[ip];
-                    h_X_array[num_batch] = &st_leafmtxp->zbu_gpu[0][size_y];
+                    if (max(ndl, kt) > batch_max_blocksize) {
+                        // dimension,
+                        h_M_streamed[num_streamed] = h_M[num_batch];
+                        h_N_streamed[num_streamed] = h_N[num_batch];
+                        //printf( " %d: compress-2(%d): %dx%d at (%d,%d)\n",ip,num_streamed,h_M_streamed[num_streamed],h_N_streamed[num_streamed],nstrtl,nstrtt);
 
-                    // pointer to output, y
-                    h_Y_array[num_batch] = &st_leafmtxp->zau_gpu[0][nstrtl-1];
+                        // pointer to input, A
+                        h_A_array_streamed[num_streamed] = &dA[total_size_a];
+                        total_size_a += lda*h_N_streamed[num_streamed];
 
-                    // ld and inc
-                    h_lda[num_batch] = lda;
-                    h_inc[num_batch] = 1;
-                    num_batch ++;
+                        // pointer to input, zu
+                        int size_y = saved_sz[ip];
+                        h_X_array_streamed[num_streamed] = &st_leafmtxp->zbu_gpu[0][size_y];
+
+                        // pointer to output, y
+                        h_Y_array_streamed[num_streamed] = &st_leafmtxp->zau_gpu[0][nstrtl-1];
+
+                        // ld and inc
+                        h_lda_streamed[num_streamed] = lda;
+                        num_streamed ++;
+                    } else {
+                        // pointer to input, A
+                        h_A_array[num_batch] = &dA[total_size_a];
+                        total_size_a += lda*h_N[num_batch];
+
+                        // pointer to input, zu
+                        int size_y = saved_sz[ip];
+                        h_X_array[num_batch] = &st_leafmtxp->zbu_gpu[0][size_y];
+
+                        // pointer to output, y
+                        h_Y_array[num_batch] = &st_leafmtxp->zau_gpu[0][nstrtl-1];
+
+                        // ld and inc
+                        h_lda[num_batch] = lda;
+                        h_inc[num_batch] = 1;
+                        num_batch ++;
+                    }
                 }
             } else if(sttmp->ltmtx == 2) { // full
                 // dimension
@@ -1720,29 +1875,52 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                     max_n = max(max_n, ndt);
                 }
                 lda = magma_roundup( h_M[num_batch], batch_pad );
-                h_A_array[num_batch] = &dA[total_size_a];
 
                 // copy matrix
                 if (st_leafmtxp->transA == MagmaTrans) {
-                    magma_dsetmatrix( ndt, ndl, sttmp->a1, ndt, h_A_array[num_batch], lda, queue );
+                    magma_dsetmatrix( ndt, ndl, sttmp->a1, ndt, &dA[total_size_a], lda, queue );
                 } else {
                     for (i=0; i<ndt; i++) {
                         for (j=0; j<ndl; j++) work[j + i*ndl] = (sttmp->a1)[i + j*ndt];
                     }
-                    magma_dsetmatrix( ndl, ndt, work, ndl, h_A_array[num_batch], lda, queue );
+                    magma_dsetmatrix( ndl, ndt, work, ndl, &dA[total_size_a], lda, queue );
                 }
-                total_size_a += lda*h_N[num_batch];
 
-                // pointer to input, zu
-                h_X_array[num_batch] = &st_leafmtxp->zu_gpu[nstrtt-1];
+                if (max(ndt, ndl) > batch_max_blocksize) {
+                    // dimension,
+                    h_M_streamed[num_streamed] = h_M[num_batch];
+                    h_N_streamed[num_streamed] = h_N[num_batch];
+                    //printf( " full-stream(%d): %dx%d\n",num_streamed,h_M_streamed[num_streamed],h_N_streamed[num_streamed]);
 
-                // pointer to output, y
-                h_Y_array[num_batch] = &st_leafmtxp->zau_gpu[0][nstrtl-1];
+                    // pointer to input, A
+                    h_A_array_streamed[num_streamed] = &dA[total_size_a];
+                    total_size_a += lda*h_N_streamed[num_streamed];
 
-                // ld and inc
-                h_lda[num_batch] = lda;
-                h_inc[num_batch] = 1;
-                num_batch ++;
+                    // pointer to input, zu
+                    h_X_array_streamed[num_streamed] = &st_leafmtxp->zu_gpu[nstrtt-1];
+
+                    // pointer to output, y
+                    h_Y_array_streamed[num_streamed] = &st_leafmtxp->zau_gpu[0][nstrtl-1];
+
+                    // ld and inc
+                    h_lda_streamed[num_streamed] = lda;
+                    num_streamed ++;
+                } else {
+                    // pointer to input, A
+                    h_A_array[num_batch] = &dA[total_size_a];
+                    total_size_a += lda*h_N[num_batch];
+
+                    // pointer to input, zu
+                    h_X_array[num_batch] = &st_leafmtxp->zu_gpu[nstrtt-1];
+
+                    // pointer to output, y
+                    h_Y_array[num_batch] = &st_leafmtxp->zau_gpu[0][nstrtl-1];
+
+                    // ld and inc
+                    h_lda[num_batch] = lda;
+                    h_inc[num_batch] = 1;
+                    num_batch ++;
+                }
             }
         }
         #ifdef PAD_FOR_FIXED_SIZE_BATCH
@@ -1789,6 +1967,16 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
 
     st_leafmtxp->max_M = max_M;
     st_leafmtxp->max_N = max_N;
+
+    // streamed GEMV
+    st_leafmtxp->num_streamed = num_streamed-num_streamed_t;
+    st_leafmtxp->num_streamed_t = num_streamed_t;
+    st_leafmtxp->h_M_streamed = h_M_streamed;
+    st_leafmtxp->h_N_streamed = h_N_streamed;
+    st_leafmtxp->h_lda_streamed = h_lda_streamed;
+    st_leafmtxp->h_A_array_streamed = h_A_array_streamed;
+    st_leafmtxp->h_X_array_streamed = h_X_array_streamed;
+    st_leafmtxp->h_Y_array_streamed = h_Y_array_streamed;
 
     magma_free_cpu(h_inc);
     free(saved_sz);

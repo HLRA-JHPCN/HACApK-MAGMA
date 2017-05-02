@@ -151,6 +151,24 @@ module m_HACApK_base
     integer*4,pointer :: max_M
     integer*4,pointer :: max_N
 #endif
+!   streamed GEMV
+    integer*4 num_streamed
+    integer*4 num_streamed_t
+#if defined(ISO_C_BINDING)
+    type(c_ptr) :: h_A_array_streamed
+    type(c_ptr) :: h_X_array_streamed
+    type(c_ptr) :: h_Y_array_streamed
+    type(c_ptr) :: h_M_streamed
+    type(c_ptr) :: h_N_streamed
+    type(c_ptr) :: h_lda_streamed
+#else
+    real*8,   pointer :: h_A_array_streamed
+    real*8,   pointer :: h_X_array_streamed
+    real*8,   pointer :: h_Y_array_streamed
+    integer*4,pointer :: h_M_streamed
+    integer*4,pointer :: h_N_streamed
+    integer*4,pointer :: h_lda_streamed
+#endif
 !
     !integer mpi_comm
     integer mpi_rank

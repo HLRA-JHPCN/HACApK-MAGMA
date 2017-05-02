@@ -44,6 +44,9 @@ contains
  1000 format(5(a,i10)/)
  2000 format(5(a,1pe15.8)/)
  
+   real*8 time_batch, time_set, time_copy
+   real*8,dimension(:),allocatable :: zau,zu,wws
+
  mpinr=st_ctl%lpmd(3); mpilog=st_ctl%lpmd(4); nrank=st_ctl%lpmd(2); icomm=st_ctl%lpmd(1); nthr=st_ctl%lpmd(20)
  icomm=st_ctl%lpmd(1)
  lrtrn=HACApK_generate(st_leafmtxp,st_bemv,st_ctl,gmid,ztol)
@@ -54,6 +57,7 @@ contains
  call HACApK_measurez_time_ax_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
  en_measure_time_ax=MPI_Wtime()
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000) 'lfmtx; time_AX_once  =',(en_measure_time_ax - st_measure_time_ax)/st_ctl%param(99)
+
  st_measure_time_ax=MPI_Wtime()
  call HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
  en_measure_time_ax=MPI_Wtime()
@@ -264,15 +268,16 @@ contains
  2000 format(5(a,1pe15.8)/)
 
  lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;lthr(0:) => st_ctl%lthr;lod => st_ctl%lod(:); param=>st_ctl%param(:)
- mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1); nthr=lpmd(20)
+ mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1); 
  param(91)=ztol
  if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_solve_cx start'
  nofc=st_bemv%nd;nffc=1;ndim=3
  nd=nofc*nffc
- if(st_ctl%param(1)>1) write(*,*) 'irank=',mpinr,' lthr=',lthr(0:nthr-1)
- allocate(u(nd),b(nd)); u(:nd)=sol(lod(:nd)); b(:nd)=rhs(lod(:nd))
+
+ if(st_ctl%param(1)>1) write(*,*) 'irank=',mpinr
+ allocate(u(nd),b(nd)); 
+ u(:nd)=sol(lod(:nd)); b(:nd)=rhs(lod(:nd))
  if(param(61)==3)then
-!   do il=ndnr_s,ndnr_e
    do il=1,nd
      u(il)=u(il)/st_bemv%ao(lod(il))
      b(il)=b(il)*st_bemv%ao(lod(il))
@@ -295,7 +300,10 @@ contains
         write(*,*) ' 2: HACApK_gcrm_lfmtx'
       endif
    endif
+#if defined(HAVE_MAGMA_BATCH_v1)
+!  allocate/copy to GPU, if have not done it.
    call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
+#endif
 #endif
    time_tot  = 0.0
    time_spmv = 0.0
@@ -311,7 +319,7 @@ contains
    endif
    call MPI_Barrier( icomm, ierr )
    en_measure_time_bicgstab=MPI_Wtime()
-#if defined(BICG_MAGMA_BATCH)
+#if defined(BICG_MAGMA_BATCH) & defined(HAVE_MAGMA_BATCH_v1)
    call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
 #endif
    time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab

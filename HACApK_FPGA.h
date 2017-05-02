@@ -51,6 +51,14 @@ typedef struct stc_HACApK_leafmtxp {
   magma_int_t *h_M, *h_N;
   magma_int_t *h_lda;
   magma_int_t *max_M, *max_N;
+  // streamed GEMV
+  magma_int_t num_streamed;
+  magma_int_t num_streamed_t;
+  double **h_A_array_streamed;
+  double **h_X_array_streamed;
+  double **h_Y_array_streamed;
+  magma_int_t *h_M_streamed, *h_N_streamed;
+  magma_int_t *h_lda_streamed;
   // MPI info
   //MPI_Comm mpi_comm;
   int      mpi_rank;
