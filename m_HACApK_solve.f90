@@ -889,24 +889,9 @@ end function HACApK_adot_pmt_lfmtx_hyp
  eps=param(91)
  allocate(wws(nd),wwr(nd))
  allocate(zr(nd),zshdw(nd),zp(nd),zt(nd),zkp(nd),zakp(nd),zkt(nd),zakt(nd))
- alpha = 0.0; beta = 0.0;  zeta = 0.0;
- zz=HACApK_dotp_d(nd, b, b); bnorm=dsqrt(zz);
- zp(1:nd)=0.0d0; zakp(1:nd)=0.0d0
- zr(:nd)=b(:nd)
- call HACApK_adotsub_lfmtx_hyp(zr,zshdw,st_leafmtxp,st_ctl,u,wws,wwr,isct,irct,nd)
-! call c_HACApK_adot_body_lfmtx_batch(zshdw,st_leafmtxp,u,wws, time_batch,time_set,time_copy)
-! call HACApK_adot_cax_lfmtx_comm(zshdw,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)
-! zr=zr-zshdw
-!
- zshdw(:nd)=zr(:nd)
- zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
- if(mpinr==0) print*,' '
- if(mpinr==0) print*,' ** BICG with MAGMA batched **'
 ! copy matrix to GPU
  call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
- if(mpinr==0) print*,' '
- if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
- if(mpinr==0) flush(output_unit)
+!
  time_spmv = 0.0 
  time_mpi = 0.0 
  time_batch = 0.0 
@@ -914,6 +899,26 @@ end function HACApK_adot_pmt_lfmtx_hyp
  time_copy = 0.0
  call MPI_Barrier( icomm, ierr )
  st_measure_time=MPI_Wtime()
+! initialize
+ alpha = 0.0; beta = 0.0;  zeta = 0.0;
+ zz=HACApK_dotp_d(nd, b, b); bnorm=dsqrt(zz);
+ zp(1:nd)=0.0d0; zakp(1:nd)=0.0d0
+ zr(:nd)=b(:nd)
+! call HACApK_adotsub_lfmtx_hyp(zr,zshdw,st_leafmtxp,st_ctl,u,wws,wwr,isct,irct,nd)
+ zshdw(:nd)=0.0d0
+ tic = MPI_Wtime()
+ call c_HACApK_adot_body_lfmtx_batch(zshdw,st_leafmtxp,u,wws, time_batch,time_set,time_copy)
+ time_spmv = time_spmv + (MPI_Wtime()-tic)
+ call HACApK_adot_cax_lfmtx_comm(zshdw,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)
+ zr(:nd)=zr(:nd)-zshdw(:nd)
+!
+ zshdw(:nd)=zr(:nd)
+ zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
+ if(mpinr==0) print*,' '
+ if(mpinr==0) print*,' ** BICG with MAGMA batched **'
+ if(mpinr==0) print*,' '
+ if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
+ if(mpinr==0) flush(output_unit)
  if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_bicgstab_lfmtx_flat start'
  do step=1,mstep
    if(zrnorm/bnorm<eps) exit
