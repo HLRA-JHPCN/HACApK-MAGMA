@@ -388,8 +388,8 @@ void  c_hacapk_adot_body_lfdel_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
 #endif
 
 #if defined(HAVE_MAGMA_BATCH)
-#define batch_count 10000
-//#define batch_count 1000
+//#define batch_count 10000
+#define batch_count 5000
 //#define batch_count 1
 #define batch_pad 32
 #define MAGMA_BATCH_DGEMV_ATOMIC
@@ -468,7 +468,6 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
         double tic = MPI_Wtime();
         #endif
         int num_saved = 0, count = 0;
-        //#define ACCUME_ON_CPU
         #if defined(ACCUME_ON_CPU)
         magma_dmalloc_pinned( &zau_batch,  batch_count*(st_leafmtxp->max_block) );
         #else
@@ -488,6 +487,7 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
         // first part of low-rank, zbu := V'*zu
         magmablas_dlaset( MagmaFull, st_leafmtxp->total_size_y, 1, zero, zero, 
                           st_leafmtxp->zbu_gpu[0], st_leafmtxp->total_size_y, queue );
+        magma_queue_sync( queue );
         *time_set += MPI_Wtime()-tic;
         tic = MPI_Wtime();
         #endif
@@ -576,7 +576,6 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
         *time_copy += MPI_Wtime()-tic;
         #endif
     }
-    //MPI_Barrier(MPI_COMM_WORLD);
     #define PROF_MAGMA_BATCH_COUNT
     #ifdef PROF_MAGMA_BATCH_COUNT
     if (st_leafmtxp->mpi_rank == 0) {
@@ -591,6 +590,7 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
         free(saved_ip[0]);
         free(saved_ip[1]);
     }
+    magma_queue_sync( queue );
     magma_queue_destroy( queue );
 }
 
@@ -1264,7 +1264,10 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     magma_setdevice( get_device_id(st_leafmtxp) );
     magma_getdevice( &cdev );
     magma_queue_create( cdev, &queue );
-    //printf( " processor %d uses %d GPU\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%gpus_per_proc);
+    int name_len;
+    char proc_name[300];
+    MPI_Get_processor_name( proc_name, &name_len );
+    printf( " processor %d uses %d GPU on %s\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%gpus_per_proc,proc_name);
 
     // number of blocks
     nlf = st_leafmtxp->nlf; 
@@ -1953,6 +1956,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     magma_setvector(num_batch, sizeof(magma_int_t), h_lda, 1, st_leafmtxp->d_lda, 1, queue );
     magma_setvector(num_batch, sizeof(magma_int_t), h_inc, 1, st_leafmtxp->d_inc, 1, queue );
 
+    magma_queue_sync( queue );
     magma_queue_destroy( queue );
 
     st_leafmtxp->h_type = h_type;
@@ -1982,6 +1986,139 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     free(saved_sz);
 }
 
+double c_hacapk_dotp_d(int nd, double *b, double *a) {
+    double norm = 0.0;
+    int ii;
+    for (ii=0; ii<nd; ii++) norm += b[ii]*a[ii];
+    return norm;
+}
+
+void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
+                                       double *u, double *b, double*param, int nd, int nstp, int lrtrn) {
+    // local constants
+    int ione = 1;
+    double zero = 0.0;
+    // local arrays
+    double *zr, *zshdw, *zp, *zt, *zkp, *zakp, *zkt, *zakt;
+    double *wws, *wwr;
+    int *lpmd;
+    int isct[2], irct[2];
+    // local variables
+    double eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm;
+    double en_measure_time, st_measure_time, time;
+    int step, mstep;
+    int mpinr, nrank, icomm, ierr;
+    double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+ 
+    lpmd = st_ctl->lpmd;
+    mpinr = lpmd[2]; 
+    nrank = lpmd[1]; 
+    icomm = lpmd[0];
+    MPI_Barrier( icomm );
+    mstep = param[82];
+    eps = param[90];
+    wws = (double*)malloc(nd * sizeof(double));
+    wwr = (double*)malloc(nd * sizeof(double));
+
+    zt = (double*)malloc(nd * sizeof(double));
+    zr = (double*)malloc(nd * sizeof(double));
+    zp = (double*)malloc(nd * sizeof(double));
+    zkp = (double*)malloc(nd * sizeof(double));
+    zakp = (double*)malloc(nd * sizeof(double));
+    zkt = (double*)malloc(nd * sizeof(double));
+    zakt= (double*)malloc(nd * sizeof(double));
+    zshdw = (double*)malloc(nd * sizeof(double));
+    alpha = 0.0; beta = 0.0;  zeta = 0.0;
+    zz=c_hacapk_dotp_d(nd, b, b); 
+    bnorm=sqrt(zz);
+    dlaset_( "F", &nd, &ione, &zero, &zero, zp, &nd );
+    dlaset_( "F", &nd, &ione, &zero, &zero, zp, &nd );
+    dlaset_( "F", &nd, &ione, &zero, &zero, zakp, &nd );
+    dlacpy_( "F", &nd, &ione, b, &nd, zr, &nd );
+#if 0
+ call HACApK_adotsub_lfmtx_hyp(zr,zshdw,st_leafmtxp,st_ctl,u,wws,wwr,isct,irct,nd)
+ zshdw(:nd)=zr(:nd)
+ zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
+ if(mpinr==0) print*,' '
+ if(mpinr==0) print*,' ** BICG with MAGMA batched **'
+! copy matrix to GPU
+ call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
+ if(mpinr==0) print*,' '
+ if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
+ if(mpinr==0) flush(output_unit)
+ time_spmv = 0.0
+ time_mpi = 0.0
+ time_batch = 0.0
+ time_set = 0.0
+ time_copy = 0.0
+ call MPI_Barrier( icomm, ierr )
+ st_measure_time=MPI_Wtime()
+ if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_bicgstab_lfmtx_flat start'
+ do step=1,mstep
+   if(zrnorm/bnorm<eps) exit
+   zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
+   zkp(:nd) = zp(:nd)
+!  .. SpMV ..
+   zakp(:nd)=0.0d0
+   tic = MPI_Wtime()
+   call c_HACApK_adot_body_lfmtx_batch(zakp,st_leafmtxp,zkp,wws, time_batch,time_set,time_copy)
+   time_spmv = time_spmv + (MPI_Wtime()-tic)
+   call HACApK_adot_cax_lfmtx_comm(zakp,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)
+!  .. ..
+   znorm = HACApK_dotp_d(nd,zshdw,zr); zden=HACApK_dotp_d(nd,zshdw,zakp);
+   alpha = znorm/zden;
+   znormold = znorm;
+   zt(:nd) = zr(:nd) - alpha*zakp(:nd)
+   zkt(:nd) = zt(:nd)
+!  .. SpMV ..
+   zakt(:nd)=0.0d0
+   tic = MPI_Wtime()
+   call c_HACApK_adot_body_lfmtx_batch(zakt,st_leafmtxp,zkt,wws, time_batch,time_set,time_copy)
+   time_spmv = time_spmv + (MPI_Wtime()-tic)
+   call HACApK_adot_cax_lfmtx_comm(zakt,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)
+!  .. ..
+   znorm = HACApK_dotp_d(nd,zakt,zt); zden=HACApK_dotp_d(nd,zakt,zakt);
+   zeta = znorm/zden;
+   u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
+   zr(:nd) = zt(:nd) - zeta*zakt(:nd)
+   beta = alpha/zeta * HACApK_dotp_d(nd,zshdw,zr)/znormold;
+   zrnorm = HACApK_dotp_d(nd,zr,zr);
+   zrnorm = dsqrt(zrnorm)
+   nstp = step
+!   call MPI_Barrier( icomm, ierr )
+   en_measure_time = MPI_Wtime()
+   time = en_measure_time - st_measure_time
+ 2002 format(i,a,1pe8.1,a,1pe8.1)
+   if(st_ctl%param(1)>0 .and. mpinr==0) write(6,2002) step,': time=',time,', log10(zrnorm/bnorm)=',log10(zrnorm/bnorm)
+!  exit
+ enddo
+ call MPI_Barrier( icomm, ierr )
+ en_measure_time = MPI_Wtime()
+ time = en_measure_time - st_measure_time
+! delete matrix
+ call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
+ 2001 format(5(a,1pe15.8)/)
+ 2003 format(5(a,i,a,1pe9.2)/)
+ if(st_ctl%param(1)>0)  write(6,2003) ' End: ',mpinr,' ',time
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '      BiCG         =',time
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_mpi   =',time_mpi
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_spmv  =',time_spmv
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_copy  =',time_copy
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_set   =',time_set
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_batch =',time_batch
+#endif
+    free(wws);
+    free(wwr);
+
+    free(zt);
+    free(zr);
+    free(zp);
+    free(zkp);
+    free(zakp);
+    free(zkt);
+    free(zakt);
+    free(zshdw);
+}
 /////////////////////////////////////////////////////
 //
 #endif

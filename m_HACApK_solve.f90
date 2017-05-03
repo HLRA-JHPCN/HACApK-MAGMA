@@ -87,6 +87,7 @@ contains
  type(st_HACApK_leafmtxp) :: st_leafmtxp
  type(st_HACApK_lcontrol) :: st_ctl
  real*8 :: zau(*),zu(*),wws(*),wwr(*)
+ real*8 time_spmv, time_mpi, time_batch, time_set, time_copy, tic
  integer*4 :: isct(*),irct(*)
  integer*4 :: ISTATUS(MPI_STATUS_SIZE)
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
@@ -855,6 +856,147 @@ end function HACApK_adot_pmt_lfmtx_p
  aww(st_ctl%lod(:nd))=au(:nd)
  HACApK_adot_pmt_lfmtx_hyp=lrtrn
 end function HACApK_adot_pmt_lfmtx_hyp
-
+!
+!
+!***HACApK_bicgstab_cax_lfmtx_flat
+ subroutine HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn) bind(C)
+ use, intrinsic ::  iso_c_binding
+ include 'mpif.h'
+! input arguments
+ type(st_HACApK_leafmtxp) :: st_leafmtxp
+ type(st_HACApK_lcontrol) :: st_ctl
+ real*8 :: u(nd),b(nd)
+ real*8 :: param(*)
+ integer nstp, nd, lrtrn
+! local arrays
+ real*8,dimension(:),allocatable :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
+ real*8,dimension(:),allocatable :: wws,wwr
+ integer*4,pointer :: lpmd(:)
+ integer*4 :: isct(2),irct(2)
+! local variables
+ real*8 eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm
+ real*8 en_measure_time, st_measure_time, time
+ integer step, mstep
+ integer mpinr, nrank, icomm, ierr
+ real*8 time_spmv, time_mpi, time_batch, time_set, time_copy, tic
+ 1000 format(5(a,i10)/)
+ 2000 format(5(a,f10.4)/)
+! 
+ lpmd => st_ctl%lpmd(:);
+ mpinr=lpmd(3); nrank=lpmd(2); icomm=lpmd(1)
+ call MPI_Barrier( icomm, ierr )
+ mstep=param(83)
+ eps=param(91)
+ allocate(wws(nd),wwr(nd))
+ allocate(zr(nd),zshdw(nd),zp(nd),zt(nd),zkp(nd),zakp(nd),zkt(nd),zakt(nd))
+ alpha = 0.0; beta = 0.0;  zeta = 0.0;
+ zz=HACApK_dotp_d(nd, b, b); bnorm=dsqrt(zz);
+ zp(1:nd)=0.0d0; zakp(1:nd)=0.0d0
+ zr(:nd)=b(:nd)
+ call HACApK_adotsub_lfmtx_hyp(zr,zshdw,st_leafmtxp,st_ctl,u,wws,wwr,isct,irct,nd)
+! call c_HACApK_adot_body_lfmtx_batch(zshdw,st_leafmtxp,u,wws, time_batch,time_set,time_copy)
+! call HACApK_adot_cax_lfmtx_comm(zshdw,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)
+! zr=zr-zshdw
+!
+ zshdw(:nd)=zr(:nd)
+ zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
+ if(mpinr==0) print*,' '
+ if(mpinr==0) print*,' ** BICG with MAGMA batched **'
+! copy matrix to GPU
+ call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
+ if(mpinr==0) print*,' '
+ if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
+ if(mpinr==0) flush(output_unit)
+ time_spmv = 0.0 
+ time_mpi = 0.0 
+ time_batch = 0.0 
+ time_set = 0.0
+ time_copy = 0.0
+ call MPI_Barrier( icomm, ierr )
+ st_measure_time=MPI_Wtime()
+ if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_bicgstab_lfmtx_flat start'
+ do step=1,mstep
+   if(zrnorm/bnorm<eps) exit
+   zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
+   zkp(:nd) = zp(:nd)
+!  .. SpMV ..
+   zakp(:nd)=0.0d0
+   tic = MPI_Wtime()
+   call c_HACApK_adot_body_lfmtx_batch(zakp,st_leafmtxp,zkp,wws, time_batch,time_set,time_copy)
+   time_spmv = time_spmv + (MPI_Wtime()-tic)
+   call HACApK_adot_cax_lfmtx_comm(zakp,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)
+!  .. ..
+   znorm = HACApK_dotp_d(nd,zshdw,zr); zden=HACApK_dotp_d(nd,zshdw,zakp);
+   alpha = znorm/zden; 
+   znormold = znorm;
+   zt(:nd) = zr(:nd) - alpha*zakp(:nd)
+   zkt(:nd) = zt(:nd)
+!  .. SpMV ..
+   zakt(:nd)=0.0d0
+   tic = MPI_Wtime()
+   call c_HACApK_adot_body_lfmtx_batch(zakt,st_leafmtxp,zkt,wws, time_batch,time_set,time_copy)
+   time_spmv = time_spmv + (MPI_Wtime()-tic)
+   call HACApK_adot_cax_lfmtx_comm(zakt,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)
+!  .. ..
+   znorm = HACApK_dotp_d(nd,zakt,zt); zden=HACApK_dotp_d(nd,zakt,zakt);
+   zeta = znorm/zden;
+   u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
+   zr(:nd) = zt(:nd) - zeta*zakt(:nd)
+   beta = alpha/zeta * HACApK_dotp_d(nd,zshdw,zr)/znormold;
+   zrnorm = HACApK_dotp_d(nd,zr,zr);
+   zrnorm = dsqrt(zrnorm)
+   nstp = step
+!   call MPI_Barrier( icomm, ierr )
+   en_measure_time = MPI_Wtime()
+   time = en_measure_time - st_measure_time
+ 2002 format(i,a,1pe8.1,a,1pe8.1)
+   if(st_ctl%param(1)>0 .and. mpinr==0) write(6,2002) step,': time=',time,', log10(zrnorm/bnorm)=',log10(zrnorm/bnorm)
+!  exit
+ enddo
+ call MPI_Barrier( icomm, ierr )
+ en_measure_time = MPI_Wtime()
+ time = en_measure_time - st_measure_time
+! delete matrix
+ call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
+ 2001 format(5(a,1pe15.8)/)
+ 2003 format(5(a,i,a,1pe9.2)/)
+ if(st_ctl%param(1)>0)  write(6,2003) ' End: ',mpinr,' ',time
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '      BiCG         =',time
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_mpi   =',time_mpi
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_spmv  =',time_spmv
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_copy  =',time_copy
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_set   =',time_set
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_batch =',time_batch
+end subroutine HACApK_bicgstab_cax_lfmtx_flat
+! 
+!***HACApK_adot_cax_lfmtx_comm
+ subroutine HACApK_adot_cax_lfmtx_comm(zau,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)
+ include 'mpif.h'
+ type(st_HACApK_leafmtxp) :: st_leafmtxp
+ type(st_HACApK_lcontrol) :: st_ctl
+ real*8 :: zau(*),wws(*),wwr(*)
+ real*8 time_mpi, tic
+ integer*4 :: isct(*),irct(*)
+ integer*4 :: ISTATUS(MPI_STATUS_SIZE)
+ integer*4,pointer :: lpmd(:),lnp(:),lsp(:)
+ lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;
+ mpinr=lpmd(3); nrank=lpmd(2); icomm=lpmd(1)
+ if(nrank>1)then
+   wws(1:lnp(mpinr))=zau(lsp(mpinr):lsp(mpinr)+lnp(mpinr)-1)
+   ncdp=mod(mpinr+1,nrank)
+   ncsp=mod(mpinr+nrank-1,nrank)
+   isct(1)=lnp(mpinr);isct(2)=lsp(mpinr); 
+   do ic=1,nrank-1
+     tic = MPI_Wtime()
+     call MPI_SENDRECV(isct,2,MPI_INTEGER,ncdp,1, &
+                       irct,2,MPI_INTEGER,ncsp,1,icomm,ISTATUS,ierr)
+     call MPI_SENDRECV(wws,isct,MPI_DOUBLE_PRECISION,ncdp,1, &
+                       wwr,irct,MPI_DOUBLE_PRECISION,ncsp,1,icomm,ISTATUS,ierr)
+     time_mpi = time_mpi + (MPI_Wtime()-tic)
+     zau(irct(2):irct(2)+irct(1)-1)=zau(irct(2):irct(2)+irct(1)-1)+wwr(:irct(1))
+     wws(:irct(1))=wwr(:irct(1))
+     isct(:2)=irct(:2)
+   enddo
+ endif
+ end subroutine HACApK_adot_cax_lfmtx_comm
 endmodule m_HACApK_solve
-
