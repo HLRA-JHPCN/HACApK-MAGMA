@@ -2013,7 +2013,7 @@ void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_leafmtxp *st_leafmtxp,
        isct[0] = lnp[mpinr];
        isct[1] = lsp[mpinr];
 
-       dlacpy_( "F", &lnp[mpinr], &ione, &zau[lsp[mpinr]], &lnp[mpinr], wws, &lnp[mpinr] );
+       dlacpy_( "F", &lnp[mpinr], &ione, &zau[lsp[mpinr]-1], &lnp[mpinr], wws, &lnp[mpinr] );
 
        int ic;
        for (ic=1; ic<nrank; ic++) {
@@ -2025,7 +2025,7 @@ void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_leafmtxp *st_leafmtxp,
            MPI_Sendrecv(wws, isct[0], MPI_DOUBLE, ncdp, 1,
                         wwr, irct[0], MPI_DOUBLE, ncsp, 1, icomm, &stat);
            *time_mpi += (MPI_Wtime()-tic);
-           daxpy_( &irct[0], &one, wwr, &ione, &zau[irct[1]], &ione );
+           daxpy_( &irct[0], &one, wwr, &ione, &zau[irct[1]-1], &ione );
            dlacpy_( "F", &irct[0], &ione, wwr, &irct[0], wws, &irct[0] );
            isct[0] = irct[0];
            isct[1] = irct[1];
