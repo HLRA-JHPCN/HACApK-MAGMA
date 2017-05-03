@@ -261,7 +261,7 @@ contains
  type(st_HACApK_calc_entry) :: st_bemv
  real*8 :: rhs(st_bemv%nd),sol(st_bemv%nd),ztol
  real*8,pointer :: param(:)
- real*8,dimension(:),allocatable :: u,b,www,ao
+ real*8,dimension(:),allocatable :: u,b,u_copy,www,ao
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:),lod(:)
  real*8 time_tot, time_spmv, time_mpi
  1000 format(5(a,i10)/)
@@ -275,7 +275,7 @@ contains
  nd=nofc*nffc
 
  if(st_ctl%param(1)>1) write(*,*) 'irank=',mpinr
- allocate(u(nd),b(nd)); 
+ allocate(u(nd),b(nd),u_copy(nd)); 
  u(:nd)=sol(lod(:nd)); b(:nd)=rhs(lod(:nd))
  if(param(61)==3)then
    do il=1,nd
@@ -311,8 +311,20 @@ contains
    call MPI_Barrier( icomm, ierr )
    st_measure_time_bicgstab=MPI_Wtime()
    if(param(85)==1)then
-!     call HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
-     call HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+! SpMV on GPU
+     u_copy(:nd) = u(:nd)
+     call HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+! a simpler "flat" version.
+     u_copy(:nd) = u(:nd)
+     call HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+! C version
+!    init pointers
+     st_ctl%lpmd_offset = loc(st_ctl%lpmd(:))-loc(st_ctl%param(:))
+     st_ctl%lthr_offset = loc(st_ctl%lthr(:))-loc(st_ctl%param(:))
+     st_ctl%lod_offset = loc(st_ctl%lod(:))-loc(st_ctl%param(:))
+     st_ctl%lsp_offset = loc(st_ctl%lsp(:))-loc(st_ctl%param(:))
+     st_ctl%lnp_offset = loc(st_ctl%lnp(:))-loc(st_ctl%param(:))
+     call c_HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
    elseif(param(85)==2)then
      call HACApK_gcrm_lfmtx(st_leafmtxp,st_ctl,st_bemv,u,b,param,nd,nstp,lrtrn)
    else
@@ -328,6 +340,7 @@ contains
    allocate(www(nd))
    sol(:nd)=0.0d0; www(lod(:nd))=u(:nd); sol(:nd)=www(:nd)
    deallocate(www)
+   deallocate(u_copy)
    if(param(61)==3)then
      do il=1,nd
        sol(il)=sol(il)*st_bemv%ao(il)

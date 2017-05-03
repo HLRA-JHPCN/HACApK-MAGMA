@@ -68,11 +68,16 @@ typedef struct stc_HACApK_leafmtxp {
 } stc_HACApK_leafmtxp;
 
 typedef struct stc_HACApK_lcontrol {
-  magma_int_t *lod;
-  magma_int_t *lsp;
-  magma_int_t *lnp;
-  magma_int_t *lthr;
-  magma_int_t *lpmd;
-  double *param;
   int lf_umpi;
+  int lpmd_offset;
+  int lod_offset;
+  int lsp_offset;
+  int lnp_offset; 
+  int lthr_offset;
+  double *param;       // 100
+  //magma_int_t *lpmd; // 30
+  //magma_int_t *lod;  // nd
+  //magma_int_t *lsp;  // lpmd[1]; //nrank
+  //magma_int_t *lnp;  // lpmd[1]; //nrank
+  //magma_int_t *lthr;
 } stc_HACApK_lcontrol;

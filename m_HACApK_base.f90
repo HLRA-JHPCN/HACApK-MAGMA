@@ -178,9 +178,18 @@ module m_HACApK_base
 
 !*** type :: st_HACApK_lcontrol
   type :: st_HACApK_lcontrol
-    integer*4,pointer :: lod(:)=>null(),lsp(:)=>null(),lnp(:)=>null(),lthr(:)=>null(),lpmd(:)=>null()
-    real*8,   pointer :: param(:)=>null()
     integer :: lf_umpi
+    integer*4 lpmd_offset  ! for C-interface
+    integer*4 lod_offset   ! for C-interface
+    integer*4 lsp_offset   ! for C-interface
+    integer*4 lnp_offset   ! for C-interface
+    integer*4 lthr_offset  ! for C-interface
+    real*8,   pointer :: param(:) =>null()
+    integer*4,pointer :: lpmd(:)  =>null()
+    integer*4,pointer :: lod(:)   =>null()
+    integer*4,pointer :: lsp(:)   =>null()
+    integer*4,pointer :: lnp(:)   =>null()
+    integer*4,pointer :: lthr(:)  =>null()
   end type st_HACApK_lcontrol
 
  interface
