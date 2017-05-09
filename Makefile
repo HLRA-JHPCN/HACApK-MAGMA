@@ -43,7 +43,7 @@ SYSTEM = TSUBAME
 ifeq ($(SYSTEM),TSUBAME)
 #OPTFLAGS = -O3 -traceback -ip -heap-arrays -qopenmp
 #OPTFLAGS = -openmp -O3
-OPTFLAGS = -qopenmp -O3
+OPTFLAGS = -qopenmp
 #CC=mpicc
 #F90=mpif90
 CC=mpiicc
@@ -57,7 +57,7 @@ endif
 
 LINK=$(F90)
 
-OBJS = HACApK_FPGA.o \
+OBJS = HACApK_MAGMA.o HACApK_BATCH.o HACApK_BATCH_SORT.o HACApK_SOLVER.o \
        HACApK_lib.o m_ppohBEM_user_func.o m_ppohBEM_matrix_element_ij.o m_HACApK_calc_entry_ij.o \
        m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.2.o \
 
@@ -96,6 +96,9 @@ INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
 
 LIBS+= -L$(CUDA_DIR)/lib64 -lcublas -lcusparse -lcudart $(MAGMA_DIR)/lib/libmagma.a
 
+#CCFLAGS += -DISO_C_BINDING
+#F90FLAGS+= -DISO_C_BINDING
+
 CCFLAGS += -DHAVE_MAGMA
 F90FLAGS+= -DHAVE_MAGMA
 
@@ -105,9 +108,11 @@ F90FLAGS+= -DHAVE_MAGMA_BATCH
 CCFLAGS += -DPROF_MAGMA_BATCH
 F90FLAGS+= -DPROF_MAGMA_BATCH
 
-#CCFLAGS += -DBICG_MAGMA_BATCH
-#F90FLAGS+= -DBICG_MAGMA_BATCH
+CCFLAGS += -DBICG_MAGMA_BATCH
+F90FLAGS+= -DBICG_MAGMA_BATCH
 
+#OPTFLAGS += -O3
+CCFLAGS += -g
 #CCFLAGS += -Wall -Wremarks -Wcheck
 
 
