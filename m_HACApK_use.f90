@@ -308,15 +308,33 @@ contains
    time_tot  = 0.0
    time_spmv = 0.0
    time_mpi  = 0.0
-   call MPI_Barrier( icomm, ierr )
-   st_measure_time_bicgstab=MPI_Wtime()
    if(param(85)==1)then
 ! SpMV on GPU
      u_copy(:nd) = u(:nd)
-     call HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+       call HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+       write(6,2000) ' time_HACApK_solve SpMV on GPU =',time_bicgstab
+       write(6,*) 
+     endif
+
 ! a simpler "flat" version.
      u_copy(:nd) = u(:nd)
-     call HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+       call HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+       write(6,2000) ' time_HACApK_flat SpMV on GPU =',time_bicgstab
+       write(6,*) 
+     endif
+
 ! C version
 !    init pointers
      st_ctl%lpmd_offset = loc(st_ctl%lpmd(:))-loc(st_ctl%param(:))
@@ -324,18 +342,42 @@ contains
      st_ctl%lod_offset = loc(st_ctl%lod(:))-loc(st_ctl%param(:))
      st_ctl%lsp_offset = loc(st_ctl%lsp(:))-loc(st_ctl%param(:))
      st_ctl%lnp_offset = loc(st_ctl%lnp(:))-loc(st_ctl%param(:))
-     call c_HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+     u_copy(:nd) = u(:nd)
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+       call c_HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+       write(6,2000) ' time_c_HACApK SpMV on GPU =',time_bicgstab
+       write(6,*) 
+     endif
+
+! C version, all on GPU
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+       call c_HACApK_bicgstab_cax_lfmtx_gpu(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+       write(6,2000) ' time_c_HACApK all on GPU =',time_bicgstab
+       write(6,*) 
+     endif
+
    elseif(param(85)==2)then
      call HACApK_gcrm_lfmtx(st_leafmtxp,st_ctl,st_bemv,u,b,param,nd,nstp,lrtrn)
    else
    endif
-   call MPI_Barrier( icomm, ierr )
-   en_measure_time_bicgstab=MPI_Wtime()
 #if defined(BICG_MAGMA_BATCH) & defined(HAVE_MAGMA_BATCH_v1)
-   call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
-#endif
+   call MPI_Barrier( icomm, ierr )
+   st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
+   call MPI_Barrier( icomm, ierr )
    time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
    if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000)              'time_HACApK_solve  =',time_bicgstab
+#endif
    if(st_ctl%param(1)>0 .and. mpinr==0 .and. nstp>0)  write(6,2000) '       time_1step  =',time_bicgstab/nstp
    allocate(www(nd))
    sol(:nd)=0.0d0; www(lod(:nd))=u(:nd); sol(:nd)=www(:nd)

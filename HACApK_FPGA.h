@@ -81,3 +81,11 @@ typedef struct stc_HACApK_lcontrol {
   //magma_int_t *lnp;  // lpmd[1]; //nrank
   //magma_int_t *lthr;
 } stc_HACApK_lcontrol;
+
+
+void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp);
+void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+                                          double *time_batch, double *time_set, double *time_copy,
+                                          int on_gpu, magma_queue_t queue);
+void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+                                     double *time_batch, double *time_set, double *time_copy);
