@@ -3,7 +3,7 @@
 #include	<time.h>
 #include	"omp.h"
 #include	"mpi.h"
-#include	"HACApK_FPGA.h"
+#include	"HACApK_MAGMA.h"
 
 // /////////////////////////////////////////////////////////////////////////
 // DGEMV using MAGMA

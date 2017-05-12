@@ -3,7 +3,7 @@
 #include	<time.h>
 #include	"omp.h"
 #include	"mpi.h"
-#include	"HACApK_FPGA.h"
+#include	"HACApK_MAGMA.h"
 
 // /////////////////////////////////////////////////////////////////////////
 // DGEMV using MAGMA
@@ -56,8 +56,6 @@ static int get_device_id(stc_HACApK_leafmtxp *st_leafmtxp) {
 
 /////////////////////////////////////////////////////
 // MatVec with batched GEMV
-
-#include <cuda_runtime.h>
 
 int c_hacapk_adot_body_lfmtx_batch_dgemv(stc_HACApK_leafmtxp *st_leafmtxp, int *saved_ip[2],
                                          int *ip_start, int num_batch, int count,
