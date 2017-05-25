@@ -12,32 +12,9 @@
 // > using MAGMA batched DGEMV, sorted (in-place)
 // /////////////////////////////////////////////////////////////////////////
 #if defined(HAVE_MAGMA_BATCH)
-#define num_streams 1
-#define max(a,b) (((a) > (b) ? (a) : (b)))
-#define min(a,b) (((a) < (b) ? (a) : (b)))
-
-//#define batch_count 10000
-#define batch_count 5000
-//#define batch_count 1
-#define batch_pad 32
-#define MAGMA_BATCH_DGEMV_ATOMIC
-#define BATCH_IN_PLACE_Y // this is needed with c_hacapk_adot_body_lfcpy_batch_sorted_
-#define SORT_BATCH_BY_SIZES
-#define USE_QSORT
-#define gpus_per_proc 3
-#define batch_max_blocksize 10000000 
-//#define batch_max_blocksize 1000 
-
-static int get_device_id(stc_HACApK_leafmtxp *st_leafmtxp) {
-    return (st_leafmtxp->mpi_rank)%gpus_per_proc;
-}
 
 /////////////////////////////////////////////////////
 // Sorter for MatVec with batched GEMV
-
-// sort blocks for batched kernel to utilize GPU better
-#define sort_array_size 4
-#define sort_group_size 8
 
 #ifdef SORT_BATCH_BY_SIZES
 int hacapk_size_sorter(const void* arg1,const void* arg2) {
@@ -84,7 +61,7 @@ int hacapk_size_sorter_trans(const void* arg1,const void* arg2) {
   #endif
 }
 
-static void hacapk_sort(int n, int *sizes) {
+void hacapk_sort(int n, int *sizes) {
   int igap, i, j, k;
   int temp;
   igap = n / 2;

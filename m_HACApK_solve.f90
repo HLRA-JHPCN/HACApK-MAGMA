@@ -378,7 +378,7 @@ end subroutine HACApK_bicgstab_lfmtx
  if(mpinr==0) print*,' '
 #if defined(BICG_MAGMA_BATCH)
  if(mpinr==0) print*,' ** BICG with MAGMA batched **'
-#if !defined(BICG_MAGMA_BATCH_v1)
+#if defined(REALLOCATE_MAGMA_BATCH)
  call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
 #endif
 #elif defined(BICG_MAGMA)
@@ -436,9 +436,7 @@ end subroutine HACApK_bicgstab_lfmtx
  en_measure_time = MPI_Wtime()
  time = en_measure_time - st_measure_time
 #if defined(BICG_MAGMA_BATCH)
-#if !defined(BICG_MAGMA_BATCH_v1)
-   call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
-#endif
+  call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
 #elif defined(BICG_MAGMA)
  call c_HACApK_adot_body_lfdel_gpu(st_leafmtxp)
 #endif
@@ -721,7 +719,7 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
 !   call c_HACApK_adot_body_lfcpy_batch(st_leafmtxp)
    call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
    call c_HACApK_adot_body_lfmtx_batch(v,st_leafmtxp,b,wws,time_batch,time_set,time_copy)
-#if !defined(BICG_MAGMA_BATCH_v1)
+#if defined(REALLOCATE_MAGMA_BATCH)
 !  don't delete it if needed to call BICG
    call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
 #endif

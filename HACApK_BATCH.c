@@ -12,21 +12,6 @@
 // > using MAGMA batched DGEMV, sorted (in-place)
 // /////////////////////////////////////////////////////////////////////////
 #if defined(HAVE_MAGMA_BATCH)
-#define num_streams 1
-#define max(a,b) (((a) > (b) ? (a) : (b)))
-#define min(a,b) (((a) < (b) ? (a) : (b)))
-
-//#define batch_count 10000
-#define batch_count 5000
-//#define batch_count 1
-#define batch_pad 32
-#define MAGMA_BATCH_DGEMV_ATOMIC
-#define BATCH_IN_PLACE_Y // this is needed with c_hacapk_adot_body_lfcpy_batch_sorted_
-#define SORT_BATCH_BY_SIZES
-#define USE_QSORT
-#define gpus_per_proc 3
-#define batch_max_blocksize 10000000 
-//#define batch_max_blocksize 1000 
 
 void magma_iprint( magma_int_t m, magma_int_t n,
                    magma_int_t *A, magma_int_t lda ) {
@@ -49,10 +34,6 @@ void magma_iprint_gpu( magma_int_t m, magma_int_t n,
     magma_free_cpu( A );
 }
 
-
-static int get_device_id(stc_HACApK_leafmtxp *st_leafmtxp) {
-    return (st_leafmtxp->mpi_rank)%gpus_per_proc;
-}
 
 /////////////////////////////////////////////////////
 // MatVec with batched GEMV
@@ -238,7 +219,7 @@ void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_l
             #endif
         }
     }
-    #define PROF_MAGMA_BATCH_COUNT
+    //#define PROF_MAGMA_BATCH_COUNT
     #ifdef PROF_MAGMA_BATCH_COUNT
     if (st_leafmtxp->mpi_rank == 0) {
         printf( " time_copy : %.2e seconds\n",  *time_copy /dgemv_count );

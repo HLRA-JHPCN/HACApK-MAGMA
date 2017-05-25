@@ -63,9 +63,6 @@ void  c_hacapk_adot_body_lfmtx_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, d
 // > using MAGMA batched DGEMV, sorted (in-place)
 // /////////////////////////////////////////////////////////////////////////
 #if defined(HAVE_MAGMA)
-#define num_streams 1
-#define max(a,b) (((a) > (b) ? (a) : (b)))
-#define min(a,b) (((a) < (b) ? (a) : (b)))
 
 /////////////////////////////////////////////////////
 // MatVec on GPU

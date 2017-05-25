@@ -170,6 +170,57 @@ module m_HACApK_base
     integer*4,pointer :: h_lda_streamed
 #endif
 !
+!   multi-GPU support
+#if defined(ISO_C_BINDING)
+    type(c_ptr) :: d_A_mgpu
+    type(c_ptr) :: d_X_mgpu
+    type(c_ptr) :: d_Y_mgpu
+    type(c_ptr) :: d_M_mgpu
+    type(c_ptr) :: d_N_mgpu
+    type(c_ptr) :: d_lda_mgpu
+    type(c_ptr) :: d_inc_mgpu
+    type(c_ptr) :: zu_mgpu
+    type(c_ptr) :: zau_mgpu
+    type(c_ptr) :: zbu_mgpu
+    type(c_ptr) :: h_A_mgpu
+    type(c_ptr) :: h_X_mgpu
+    type(c_ptr) :: h_Y_mgpu
+    type(c_ptr) :: h_type_mgpu
+    type(c_ptr) :: h_I_mgpu
+    type(c_ptr) :: h_J_mgpu
+    type(c_ptr) :: h_M_mgpu
+    type(c_ptr) :: h_N_mgpu
+    type(c_ptr) :: h_lda_mgpu
+    type(c_ptr) :: max_M_mgpu
+    type(c_ptr) :: max_N_mgpu
+    type(c_ptr) :: nlf_mgpu
+    type(c_ptr) :: num_batch_mgpu
+#else
+    real*8,   pointer :: d_A_mgpu
+    real*8,   pointer :: d_X_mgpu
+    real*8,   pointer :: d_Y_mgpu
+    integer*4,pointer :: d_M_mgpu
+    integer*4,pointer :: d_N_mgpu
+    integer*4,pointer :: d_lda_mgpu
+    integer*4,pointer :: d_inc_mgpu
+    real*8,   pointer :: zu_mgpu
+    real*8,   pointer :: zau_mgpu
+    real*8,   pointer :: zbu_mgpu
+    real*8,   pointer :: h_A_mgpu
+    real*8,   pointer :: h_X_mgpu
+    real*8,   pointer :: h_Y_mgpu
+    integer*4,pointer :: h_type_mgpu
+    integer*4,pointer :: h_I_mgpu
+    integer*4,pointer :: h_J_mgpu
+    integer*4,pointer :: h_M_mgpu
+    integer*4,pointer :: h_N_mgpu
+    integer*4,pointer :: h_lda_mgpu
+    integer*4,pointer :: max_M_mgpu
+    integer*4,pointer :: max_N_mgpu
+    integer*4,pointer :: nlf_mgpu
+    integer*4,pointer :: num_batch_mgpu
+#endif
+
     !integer mpi_comm
     integer mpi_rank
 #endif

@@ -59,6 +59,26 @@ typedef struct stc_HACApK_leafmtxp {
   double **h_Y_array_streamed;
   magma_int_t *h_M_streamed, *h_N_streamed;
   magma_int_t *h_lda_streamed;
+  // multi-GPU support
+  double ***d_A_mgpu;
+  double ***d_X_mgpu;
+  double ***d_Y_mgpu;
+  magma_int_t **d_M_mgpu, **d_N_mgpu;
+  magma_int_t **d_lda_mgpu;
+  magma_int_t **d_inc_mgpu;
+  magmaDouble_ptr *zu_mgpu;
+  magmaDouble_ptr *zau_mgpu;
+  magmaDouble_ptr *zbu_mgpu; 
+  double ***h_A_mgpu;
+  double ***h_X_mgpu;
+  double ***h_Y_mgpu;
+  magma_int_t **h_type_mgpu;
+  magma_int_t **h_I_mgpu, **h_J_mgpu;
+  magma_int_t **h_M_mgpu, **h_N_mgpu;
+  magma_int_t **h_lda_mgpu;
+  magma_int_t **max_M_mgpu, **max_N_mgpu;
+  magma_int_t *nlf_mgpu;
+  magma_int_t *num_batch_mgpu;
   // MPI info
   //MPI_Comm mpi_comm;
   int      mpi_rank;
@@ -83,9 +103,47 @@ typedef struct stc_HACApK_lcontrol {
 } stc_HACApK_lcontrol;
 
 
+#define num_streams 1
+#define max(a,b) (((a) > (b) ? (a) : (b)))
+#define min(a,b) (((a) < (b) ? (a) : (b)))
+
+//#define batch_count 1
+//#define batch_count 10000
+#define batch_count 5000
+#define batch_count 2
+#define batch_pad 32
+#define MAGMA_BATCH_DGEMV_ATOMIC
+#define BATCH_IN_PLACE_Y // this is needed with c_hacapk_adot_body_lfcpy_batch_sorted_
+#define SORT_BATCH_BY_SIZES
+#define USE_QSORT
+#define batch_max_blocksize 10000000 
+//#define batch_max_blocksize 1000 
+
+// sort blocks for batched kernel to utilize GPU better
+#define sort_array_size 4
+#define sort_group_size 8
+
+#define gpus_per_proc 3
+#define num_gpus 2
+
 void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp);
 void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
                                           double *time_batch, double *time_set, double *time_copy,
                                           int on_gpu, magma_queue_t queue);
 void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
                                      double *time_batch, double *time_set, double *time_copy);
+
+void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp,
+                                                 magma_queue_t *queue);
+void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+                                         double *zau_cpu, double *zu_cpu,
+                                         double *time_batch, double *time_set, double *time_copy, int on_gpu,
+                                         magma_queue_t *queue);
+
+int hacapk_size_sorter(const void* arg1,const void* arg2);
+int hacapk_size_sorter_trans(const void* arg1,const void* arg2);
+void hacapk_sort(int n, int *sizes);
+
+static int get_device_id(stc_HACApK_leafmtxp *st_leafmtxp) {
+    return (st_leafmtxp->mpi_rank)%gpus_per_proc;
+}
