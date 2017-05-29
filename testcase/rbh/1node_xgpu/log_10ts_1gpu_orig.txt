@@ -1,0 +1,219 @@
+ Number of processes            1
+ Number of unknowns set on each face element =            1
+ Selected linear solver = BICGSTAB        
+ Convergence criterion =   1.000000000000000E-006
+ Upper limit of iteration counts =         5000
+ Number of total threads, Thread number           18           0
+ ext_ndim =        10400 , ndim =        10400
+ ***************** HACApK start ********************
+nd=     10400 nofc=     10400 nffc=         1
+nrank=         1 nth=        18
+No. of cluster=        1823
+ No. of nsmtx        8430       14860        7763
+    1:Rk-matrix 2: dense-mat 3:H-matrix
+ncpc=    11511098  ncpc/nrank=    11511098
+ time_supermatrix             =  7.257795333862305E-002
+ time_fill_hmtx               =  0.466839075088501     
+ time_construction_Hmatrix    =  0.539417028427124     
+ Memory of the H-matrix=   135.706634521484      (Mbyte)
+ Memory compression v.s. dense matrix=   16.4453957100592      (%)
+ Maximun memory of sub-matrices for a MPI=   135.706634521484      (Mbyte)
+ Minimun memory of sub-matrices for a MPI=   135.706634521484      (Mbyte)
+ Minimun memory/Maximun memory=   1.00000000000000     
+ lnp=       10400
+ lsp=           1
+ HACApK_solve start
+ HACApK_bicgstab_lfmtx_hyp start
+ Original relative residual norm =   1.00000000000000     
+           1  9.474992752075195E-003  -5.26690931612442     
+           2  1.486277580261230E-002  -5.62242133762223     
+           3  2.019000053405762E-002  -5.78690368378522     
+           4  2.550983428955078E-002  -6.02877915808357     
+time_HACApK_solve  = 2.55420208E-02
+       time_1step  = 6.38550520E-03
+lfmtx; time_AX_once  = 2.95305252E-03
+% MAGMA 2.2.0  compiled for CUDA capability >= 6.0, 32-bit magma_int_t, 64-bit pointer.
+% CUDA runtime 8000, driver 8000. OpenMP threads 18. MKL 2017.0.1, MKL threads 18. 
+% device 0: Tesla P100-SXM2-16GB, 1480.5 MHz clock, 16276.2 MiB memory, capability 6.0
+% device 1: Tesla P100-SXM2-16GB, 1480.5 MHz clock, 16276.2 MiB memory, capability 6.0
+% Mon May 29 20:17:01 2017
+ 10400-by-10400 matrix (# blocks=23290)
+ time_cpu: 3.85e-02 seconds
+
+ error(CPU-GPU): 2.501E+22 /  2.501E+22 =  1.000E+00
+ 
+% MAGMA 2.2.0  compiled for CUDA capability >= 6.0, 32-bit magma_int_t, 64-bit pointer.
+% CUDA runtime 8000, driver 8000. OpenMP threads 18. MKL 2017.0.1, MKL threads 18. 
+% device 0: Tesla P100-SXM2-16GB, 1480.5 MHz clock, 16276.2 MiB memory, capability 6.0
+% device 1: Tesla P100-SXM2-16GB, 1480.5 MHz clock, 16276.2 MiB memory, capability 6.0
+% Mon May 29 20:17:03 2017
+ processor 0 uses 0 GPU on a086
+ 10400-by-10400 matrix (# blocks=23290)
+  total_size_y=98891, total_size_a=35550432
+  > batched GEMV with Non Transposes
+
+
+ ++ num_batch=31720 (this include num_streamed), num_streamed=0,0 ++
+
+ time_copy : 1.21e-04 seconds
+ time_set  : 5.41e-05 seconds
+ time_batch: 5.60e-04 seconds
+
+ error(CPU-GPU): 2.501E+22 /  2.501E+22 =  1.000E+00
+ 
+ c_HACApK_adot_body_lfmtx end
+lfmtx; time_FPGA_AX_once  = 3.58250403E+00
+ HACApK_solve_cx start
+  
+  ** BICG, original **
+  
+ Original relative residual norm =   1.00000000000000     
+ HACApK_bicgstab_lfmtx_hyp start
+           1: time= 3.7E-02, log10(zrnorm/bnorm)=-5.3E+00
+           2: time= 7.5E-02, log10(zrnorm/bnorm)=-5.6E+00
+           3: time= 1.1E-01, log10(zrnorm/bnorm)=-5.8E+00
+           4: time= 1.5E-01, log10(zrnorm/bnorm)=-6.0E+00
+ End:            0  1.50E-01
+      BiCG         = 1.50383949E-01
+        time_tot   = 1.49717808E-01
+        time_mpi   = 0.00000000E+00
+        time_spmv  = 1.49637222E-01
+        > time_copy  = 0.00000000E+00
+        > time_set   = 0.00000000E+00
+        > time_batch = 0.00000000E+00
+% MAGMA 2.2.0  compiled for CUDA capability >= 6.0, 32-bit magma_int_t, 64-bit pointer.
+% CUDA runtime 8000, driver 8000. OpenMP threads 18. MKL 2017.0.1, MKL threads 18. 
+% device 0: Tesla P100-SXM2-16GB, 1480.5 MHz clock, 16276.2 MiB memory, capability 6.0
+% device 1: Tesla P100-SXM2-16GB, 1480.5 MHz clock, 16276.2 MiB memory, capability 6.0
+% Mon May 29 20:17:04 2017
+ processor 0 uses 0 GPU on a086
+ 10400-by-10400 matrix (# blocks=23290)
+  total_size_y=98891, total_size_a=35550432
+  > batched GEMV with Non Transposes
+
+
+ ++ num_batch=31720 (this include num_streamed), num_streamed=0,0 ++
+
+ time_copy : 1.12e-04 seconds
+ time_set  : 3.41e-05 seconds
+ time_batch: 5.41e-04 seconds
+
+  
+  ** BICG with MAGMA batched **
+  
+ Original relative residual norm =   1.00000000000000     
+ HACApK_bicgstab_lfmtx_flat start
+ time_copy : 2.14e-04 seconds
+ time_set  : 5.82e-05 seconds
+ time_batch: 1.08e-03 seconds
+
+ time_copy : 3.18e-04 seconds
+ time_set  : 8.11e-05 seconds
+ time_batch: 1.61e-03 seconds
+
+           1: time= 1.0E-02, log10(zrnorm/bnorm)=-5.3E+00
+ time_copy : 4.21e-04 seconds
+ time_set  : 1.04e-04 seconds
+ time_batch: 2.14e-03 seconds
+
+ time_copy : 5.22e-04 seconds
+ time_set  : 1.28e-04 seconds
+ time_batch: 2.68e-03 seconds
+
+           2: time= 1.5E-02, log10(zrnorm/bnorm)=-5.6E+00
+ time_copy : 6.23e-04 seconds
+ time_set  : 1.51e-04 seconds
+ time_batch: 3.21e-03 seconds
+
+ time_copy : 7.22e-04 seconds
+ time_set  : 1.80e-04 seconds
+ time_batch: 3.75e-03 seconds
+
+           3: time= 2.2E-02, log10(zrnorm/bnorm)=-5.8E+00
+ time_copy : 8.22e-04 seconds
+ time_set  : 2.03e-04 seconds
+ time_batch: 4.28e-03 seconds
+
+ time_copy : 9.23e-04 seconds
+ time_set  : 2.25e-04 seconds
+ time_batch: 4.82e-03 seconds
+
+           4: time= 2.8E-02, log10(zrnorm/bnorm)=-6.0E+00
+ End:            0  2.79E-02
+      BiCG         = 2.79350281E-02
+        time_mpi   = 0.00000000E+00
+        time_spmv  = 2.73439884E-02
+        > time_copy  = 9.23156738E-04
+        > time_set   = 2.24590302E-04
+        > time_batch = 4.81843948E-03
+ *nd=10400, mpinr=0, nrank=1, mstep=5000, eps=1.00e-06
+% MAGMA 2.2.0  compiled for CUDA capability >= 6.0, 32-bit magma_int_t, 64-bit pointer.
+% CUDA runtime 8000, driver 8000. OpenMP threads 18. MKL 2017.0.1, MKL threads 18. 
+% device 0: Tesla P100-SXM2-16GB, 1480.5 MHz clock, 16276.2 MiB memory, capability 6.0
+% device 1: Tesla P100-SXM2-16GB, 1480.5 MHz clock, 16276.2 MiB memory, capability 6.0
+% Mon May 29 20:17:04 2017
+ processor 0 uses 0 GPU on a086
+ 10400-by-10400 matrix (# blocks=23290)
+  total_size_y=98891, total_size_a=35550432
+  > batched GEMV with Non Transposes
+
+
+ ++ num_batch=31720 (this include num_streamed), num_streamed=0,0 ++
+
+ time_copy : 1.15e-04 seconds
+ time_set  : 3.19e-05 seconds
+ time_batch: 5.39e-04 seconds
+
+
+ ** BICG with MAGMA batched **
+
+Original relative residual norm = 1.02e+02/1.02e+02 = 1.00e+00
+HACApK_bicgstab_lfmtx_flat start
+ time_copy : 2.21e-04 seconds
+ time_set  : 5.70e-05 seconds
+ time_batch: 1.08e-03 seconds
+
+ time_copy : 3.24e-04 seconds
+ time_set  : 7.99e-05 seconds
+ time_batch: 1.62e-03 seconds
+
+ 1: time=9.48e-02 log10(zrnorm/bnorm)=log10(5.52e-04/1.02e+02)=-5.27e+00
+ time_copy : 4.24e-04 seconds
+ time_set  : 1.04e-04 seconds
+ time_batch: 2.15e-03 seconds
+
+ time_copy : 5.23e-04 seconds
+ time_set  : 1.27e-04 seconds
+ time_batch: 2.68e-03 seconds
+
+ 2: time=1.00e-01 log10(zrnorm/bnorm)=log10(2.43e-04/1.02e+02)=-5.62e+00
+ time_copy : 6.20e-04 seconds
+ time_set  : 1.50e-04 seconds
+ time_batch: 3.22e-03 seconds
+
+ time_copy : 7.21e-04 seconds
+ time_set  : 1.72e-04 seconds
+ time_batch: 3.76e-03 seconds
+
+ 3: time=1.06e-01 log10(zrnorm/bnorm)=log10(1.67e-04/1.02e+02)=-5.79e+00
+ time_copy : 8.22e-04 seconds
+ time_set  : 1.94e-04 seconds
+ time_batch: 4.29e-03 seconds
+
+ time_copy : 9.24e-04 seconds
+ time_set  : 2.17e-04 seconds
+ time_batch: 4.83e-03 seconds
+
+ 4: time=1.12e-01 log10(zrnorm/bnorm)=log10(9.54e-05/1.02e+02)=-6.03e+00
+ End: 0, 1.12e-01
+       BiCG        = 1.12e-01
+        time_mpi   = 0.00e+00
+        time_spmv  = 2.45e-02
+        > time_copy  = 9.24e-04
+        > time_set   = 2.17e-04
+        > time_batch = 4.83e-03
+time_HACApK_solve  = 1.21829200E+00
+       time_1step  = 3.04572999E-01
+ before HACApK time =   3.7942886E-02  [sec]
+        HACApK time =    5.458565      [sec]
+ _____________all time =    5.503745      [sec]
