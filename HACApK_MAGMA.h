@@ -110,7 +110,7 @@ typedef struct stc_HACApK_lcontrol {
 //#define batch_count 1
 //#define batch_count 10000
 #define batch_count 5000
-#define batch_count 2
+//#define batch_count 2
 #define batch_pad 32
 #define MAGMA_BATCH_DGEMV_ATOMIC
 #define BATCH_IN_PLACE_Y // this is needed with c_hacapk_adot_body_lfcpy_batch_sorted_
@@ -123,8 +123,8 @@ typedef struct stc_HACApK_lcontrol {
 #define sort_array_size 4
 #define sort_group_size 8
 
-#define procs_per_node 3
-#define gpus_per_proc 3
+#define procs_per_node 3 // number processes per node (used to figure out which process uses which gpu)
+#define gpus_per_proc 3  // number of gpus per process (used for multi-GPU/proc support)
 
 void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp);
 void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,

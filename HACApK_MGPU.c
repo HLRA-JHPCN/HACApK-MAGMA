@@ -630,7 +630,7 @@ printf( " %d: batch_left=%d-%d=%d (ip=%d,nlf=%d)\n",d,nlf,num_batch-count,batch_
     ip_end = (*ip_start) + (*batchCount);
 
     // passing max M and N
-    #if 0
+    #if 1
     magmablas_dgemv_vbatched_max_nocheck_atomic(
                                     st_leafmtxp->transA, &d_M[num_batch], &d_N[num_batch],
                                     one, &d_A_array[num_batch], &d_lda[num_batch],
