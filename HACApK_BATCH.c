@@ -472,7 +472,7 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     magma_setdevice( get_device_id(st_leafmtxp) );
     magma_getdevice( &cdev );
     magma_queue_create( cdev, &queue );
-    printf( " processor %d uses %d GPU\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%gpus_per_proc);
+    printf( " processor %d uses %d GPU\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%procs_per_node);
 
     // number of blocks
     nlf = st_leafmtxp->nlf; 

@@ -123,8 +123,8 @@ typedef struct stc_HACApK_lcontrol {
 #define sort_array_size 4
 #define sort_group_size 8
 
+#define procs_per_node 3
 #define gpus_per_proc 3
-#define num_gpus 2
 
 void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp);
 void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
@@ -145,5 +145,5 @@ int hacapk_size_sorter_trans(const void* arg1,const void* arg2);
 void hacapk_sort(int n, int *sizes);
 
 static int get_device_id(stc_HACApK_leafmtxp *st_leafmtxp) {
-    return (st_leafmtxp->mpi_rank)%gpus_per_proc;
+    return (st_leafmtxp->mpi_rank)%procs_per_node;
 }

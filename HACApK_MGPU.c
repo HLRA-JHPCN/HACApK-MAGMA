@@ -31,7 +31,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
     int name_len;
     char proc_name[300];
     MPI_Get_processor_name( proc_name, &name_len );
-    printf( " processor %d uses %d GPU on %s\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%gpus_per_proc,proc_name);
+    printf( " processor %d uses %d GPU on %s\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%procs_per_node,proc_name);
 
     // number of blocks
     nlf = st_leafmtxp->nlf; 
@@ -110,12 +110,12 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
 
     // workspace for GEMV on GPU
     int d;
-    st_leafmtxp->zu_mgpu  = (double**)malloc(num_gpus * sizeof(double*)); 
-    st_leafmtxp->zau_mgpu = (double**)malloc(num_gpus * sizeof(double*));
-    st_leafmtxp->zbu_mgpu = (double**)malloc(num_gpus * sizeof(double*));
-    double **dA = (double**)malloc(num_gpus * sizeof(double*));
-    for (d=0; d<num_gpus; d++) {
-        magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+    st_leafmtxp->zu_mgpu  = (double**)malloc(gpus_per_proc * sizeof(double*)); 
+    st_leafmtxp->zau_mgpu = (double**)malloc(gpus_per_proc * sizeof(double*));
+    st_leafmtxp->zbu_mgpu = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **dA = (double**)malloc(gpus_per_proc * sizeof(double*));
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
 
         if (st_leafmtxp->m > 0) {
             int retval = magma_malloc( (void**) &st_leafmtxp->zau_mgpu[d], (st_leafmtxp->m)*sizeof(double) );
@@ -155,19 +155,19 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
     st_leafmtxp->num_batch = num_batch;
     num_batch += 2+count_tot;
 
-    double ***h_A_array = (double***)malloc(num_gpus * sizeof(double**));
-    double ***h_X_array = (double***)malloc(num_gpus * sizeof(double**));
-    double ***h_Y_array = (double***)malloc(num_gpus * sizeof(double**));
-    magma_int_t **h_M = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    magma_int_t **h_N = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    magma_int_t **h_I = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    magma_int_t **h_J = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    magma_int_t **h_lda = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    magma_int_t **h_inc = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    magma_int_t **max_M = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    magma_int_t **max_N = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    magma_int_t **h_type = (magma_int_t**)malloc(num_gpus * sizeof(magma_int_t*));
-    for (d=0; d<num_gpus; d++) {
+    double ***h_A_array = (double***)malloc(gpus_per_proc * sizeof(double**));
+    double ***h_X_array = (double***)malloc(gpus_per_proc * sizeof(double**));
+    double ***h_Y_array = (double***)malloc(gpus_per_proc * sizeof(double**));
+    magma_int_t **h_M = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    magma_int_t **h_N = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    magma_int_t **h_I = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    magma_int_t **h_J = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    magma_int_t **h_lda = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    magma_int_t **h_inc = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    magma_int_t **max_M = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    magma_int_t **max_N = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    magma_int_t **h_type = (magma_int_t**)malloc(gpus_per_proc * sizeof(magma_int_t*));
+    for (d=0; d<gpus_per_proc; d++) {
         magma_malloc_cpu((void**)&(h_A_array[d]), num_batch*sizeof(double*));
         magma_malloc_cpu((void**)&(h_X_array[d]), num_batch*sizeof(double*));
         magma_malloc_cpu((void**)&(h_Y_array[d]), num_batch*sizeof(double*));
@@ -280,16 +280,16 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
     int tp;
     // parse all the blocks
     double *work = (double*)malloc(lwork * sizeof(double));
-    int *count = (int*)malloc(num_gpus * sizeof(int));
-    int *max_m = (int*)malloc(num_gpus * sizeof(int));
-    int *max_n = (int*)malloc(num_gpus * sizeof(int));
+    int *count = (int*)malloc(gpus_per_proc * sizeof(int));
+    int *max_m = (int*)malloc(gpus_per_proc * sizeof(int));
+    int *max_n = (int*)malloc(gpus_per_proc * sizeof(int));
     int *owner = (int*)malloc(nlf * sizeof(int));
-    int *nlf_mgpu       = (int*)malloc(num_gpus * sizeof(int));
-    int *num_batch_mgpu = (int*)malloc(num_gpus * sizeof(int));
-    int *total_size_y_mgpu = (int*)malloc(num_gpus * sizeof(int));
-    int *total_size_a_mgpu = (int*)malloc(num_gpus * sizeof(int));
-    int **saved_sz_mgpu = (int**)malloc(num_gpus * sizeof(int*)); 
-    for (d=0; d<num_gpus; d++) {
+    int *nlf_mgpu       = (int*)malloc(gpus_per_proc * sizeof(int));
+    int *num_batch_mgpu = (int*)malloc(gpus_per_proc * sizeof(int));
+    int *total_size_y_mgpu = (int*)malloc(gpus_per_proc * sizeof(int));
+    int *total_size_a_mgpu = (int*)malloc(gpus_per_proc * sizeof(int));
+    int **saved_sz_mgpu = (int**)malloc(gpus_per_proc * sizeof(int*)); 
+    for (d=0; d<gpus_per_proc; d++) {
         count[d] = 0;
         max_m[d] = max_n[d] = 0;
         num_batch_mgpu[d] = 0;
@@ -300,10 +300,13 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
     for (tp = 0; tp < st_leafmtxp->num_batch;) {
         /**/
         int tp_start = tp;
-        for (k = 0; k < num_gpus*batch_count && tp < (tp_start < nlf ? nlf : st_leafmtxp->num_batch); tp++, k++) {
+        int tp_end = (tp_start < nlf ? nlf : st_leafmtxp->num_batch);
+        int tp_inc = min(gpus_per_proc*batch_count, tp_end-tp_start);
+
+        for (k = 0; k < gpus_per_proc*batch_count && tp < tp_end; tp++, k++) {
             ip = st_leafmtxp->batch_order[tp];
-            int d = (tp < nlf ? tp%num_gpus : owner[ip]);
-            magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+            int d = (tp < nlf ? tp%gpus_per_proc : owner[ip]);
+            magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
             /**/
             stc_HACApK_leafmtx *sttmp;
             sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
@@ -474,9 +477,16 @@ printf( " dense(tp=%d, ip=%d, d=%d, %dx%d,%d)\n",tp,ip,d, h_M[d][num_batch_mgpu[
             num_batch_mgpu[d] ++;
 
             int offset = (tp < nlf ? 0 : nlf_mgpu[d])-count[d];
-            if ((num_batch_mgpu[d]-offset)%batch_count == 0
-                && tp != nlf-1 
-                && tp != st_leafmtxp->num_batch-1) {
+            if ((num_batch_mgpu[d]-offset)%batch_count == 0 && 
+#if 0
+                tp != nlf-1 
+                && tp != st_leafmtxp->num_batch-1
+#else
+                (tp_start+tp_inc <= nlf
+                 || (tp_start+tp_inc > nlf && tp_start+tp_inc <= st_leafmtxp->num_batch))
+#endif
+               ) 
+            {
                 max_M[d][count[d]] = h_M[d][num_batch_mgpu[d]] = max_m[d];
                 max_N[d][count[d]] = h_N[d][num_batch_mgpu[d]] = max_n[d];
                 // extra space for M and N with batched
@@ -493,7 +503,7 @@ printf( " >> count[%d]=%d, max=%d,%d (num_batch=%d == %d)\n",d,count[d],max_m[d]
         }
         if (tp == nlf || tp == st_leafmtxp->num_batch) {
             // left over
-            for (d=0; d<num_gpus; d++) {
+            for (d=0; d<gpus_per_proc; d++) {
                 if (max_m[d] > 0 || max_n[d] > 0) {
                     max_M[d][count[d]] = h_M[d][num_batch_mgpu[d]] = max_m[d];
                     max_N[d][count[d]] = h_N[d][num_batch_mgpu[d]] = max_n[d];
@@ -515,15 +525,15 @@ printf( " >> left-over << count[%d]=%d, max=%d,%d\n",d,count[d],max_m[d],max_n[d
     free(owner);
     free(work);
 
-    st_leafmtxp->d_A_mgpu = (double***)malloc(num_gpus*sizeof(double**));
-    st_leafmtxp->d_X_mgpu = (double***)malloc(num_gpus*sizeof(double**));
-    st_leafmtxp->d_Y_mgpu = (double***)malloc(num_gpus*sizeof(double**));
-    st_leafmtxp->d_M_mgpu = (int**)malloc(num_gpus * sizeof(int*));
-    st_leafmtxp->d_N_mgpu = (int**)malloc(num_gpus * sizeof(int*));
-    st_leafmtxp->d_lda_mgpu = (int**)malloc(num_gpus * sizeof(int*));
-    st_leafmtxp->d_inc_mgpu = (int**)malloc(num_gpus * sizeof(int*));
-    for (d=0; d<num_gpus; d++) {
-        magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+    st_leafmtxp->d_A_mgpu = (double***)malloc(gpus_per_proc*sizeof(double**));
+    st_leafmtxp->d_X_mgpu = (double***)malloc(gpus_per_proc*sizeof(double**));
+    st_leafmtxp->d_Y_mgpu = (double***)malloc(gpus_per_proc*sizeof(double**));
+    st_leafmtxp->d_M_mgpu = (int**)malloc(gpus_per_proc * sizeof(int*));
+    st_leafmtxp->d_N_mgpu = (int**)malloc(gpus_per_proc * sizeof(int*));
+    st_leafmtxp->d_lda_mgpu = (int**)malloc(gpus_per_proc * sizeof(int*));
+    st_leafmtxp->d_inc_mgpu = (int**)malloc(gpus_per_proc * sizeof(int*));
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
 
         magma_malloc((void**)&(st_leafmtxp->d_A_mgpu[d]), num_batch*sizeof(double*));
         magma_malloc((void**)&(st_leafmtxp->d_X_mgpu[d]), num_batch*sizeof(double*));
@@ -564,7 +574,7 @@ printf( " >> left-over << count[%d]=%d, max=%d,%d\n",d,count[d],max_m[d],max_n[d
     st_leafmtxp->num_batch_mgpu = num_batch_mgpu;
 
     magma_free_cpu(h_inc);
-    for (d=0; d<num_gpus; d++) {
+    for (d=0; d<gpus_per_proc; d++) {
         free(saved_sz_mgpu[d]);
     }
     free(saved_sz_mgpu);
@@ -591,7 +601,7 @@ int c_hacapk_adot_body_lfmtx_mgpu_dgemv(int d, int ip,
     int k, ip_end;
     int k_start;
     int nlf = st_leafmtxp->nlf_mgpu[d];
-    int batch_count_per_gpu = (batch_count + num_gpus-1)/num_gpus;
+    int batch_count_per_gpu = (batch_count + gpus_per_proc-1)/gpus_per_proc;
 
     *num_saved = 0;
 #ifdef CHECKI
@@ -661,20 +671,20 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_le
     int *saved_ip[2];
 
     // copy the input vector to GPU
-    int *ip_d = (int*)malloc(num_gpus * sizeof(int));
-    int *num_batch = (int*)malloc(num_gpus * sizeof(int));
+    int *ip_d = (int*)malloc(gpus_per_proc * sizeof(int));
+    int *num_batch = (int*)malloc(gpus_per_proc * sizeof(int));
     int num_saved = 0, count = 0;
     // vectors are on GPU
     #ifdef PROF_MAGMA_BATCH
     double tic = MPI_Wtime();
     #endif
-    if (num_gpus > 1) {
+    if (gpus_per_proc > 1) {
         magma_setdevice( get_device_id(st_leafmtxp) );
         magma_dgetvector( st_leafmtxp->gn, zu, 1, zu_cpu,  1, queue[0] );
         //magma_dgetvector( st_leafmtxp->m, zau, 1, zau_cpu, 1, queue[0] );
     }
-    for (d=0; d<num_gpus; d++) {
-        magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         if (d ==0) {
             magmablas_dlacpy( MagmaFull, st_leafmtxp->gn, 1, zu, st_leafmtxp->gn,
                               st_leafmtxp->zu_mgpu[d], st_leafmtxp->gn, queue[d]);
@@ -695,8 +705,8 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_le
         num_batch[d] = 0;
     }
     #ifdef PROF_MAGMA_BATCH
-    for (d=0; d<num_gpus; d++) {
-        magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         magma_queue_sync( queue[d] );
     }
     *time_set += (MPI_Wtime()-tic);
@@ -708,10 +718,10 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_le
     for (ip = 0; ip < max(st_leafmtxp->num_batch, nlf) || num_saved > 0;) {
         /**/
         int ip_start = ip;
-        for (d=0; d<num_gpus; d++) {
+        for (d=0; d<gpus_per_proc; d++) {
             int num_start = num_batch[d];
             int batchCount = 0;
-            magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+            magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
 
             // call batched GEMV and non-blocking copy to CPU
             c_hacapk_adot_body_lfmtx_mgpu_dgemv(d, ip_start, 
@@ -730,16 +740,16 @@ printf( " %d: count=%d, ip=%d, batchCount=%d (%d, %d)\n",d,count,ip,batchCount,s
     }
     // stop timer
     #ifdef PROF_MAGMA_BATCH
-    for (d=0; d<num_gpus; d++) {
-        magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         magma_queue_sync( queue[d] );
     }
     *time_batch += (MPI_Wtime()-tic);
     tic = MPI_Wtime();
     #endif
     // vectors are on GPU, accumulate on the main GPU
-    for (d=0; d<num_gpus; d++) {
-        magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         if (d == 0) {
             magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, st_leafmtxp->zau_mgpu[d], st_leafmtxp->m,
                               zau, st_leafmtxp->m, queue[d] );
@@ -755,8 +765,8 @@ printf( " %d: count=%d, ip=%d, batchCount=%d (%d, %d)\n",d,count,ip,batchCount,s
     }
     // set back to main GPU
     #ifdef PROF_MAGMA_BATCH
-    for (d=0; d<num_gpus; d++) {
-        magma_setdevice( (d+get_device_id(st_leafmtxp))%gpus_per_proc );
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         magma_queue_sync( queue[d] );
     }
     *time_set += MPI_Wtime()-tic;

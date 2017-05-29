@@ -451,9 +451,9 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 
     int on_gpu = 1, d, gpu_id = get_device_id(st_leafmtxp);
     magma_device_t cdev;
-    magma_queue_t *queue = (magma_queue_t *)malloc(num_gpus * sizeof(magma_queue_t));
-    for (d=0; d<num_gpus; d++) {
-        magma_setdevice((gpu_id+d)%gpus_per_proc);
+    magma_queue_t *queue = (magma_queue_t *)malloc(gpus_per_proc * sizeof(magma_queue_t));
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice((gpu_id+d)%procs_per_node);
         magma_getdevice( &cdev );
         magma_queue_create( cdev, &queue[d] );
     }
@@ -512,7 +512,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     zrnorm = magma_ddot(*nd, zr, ione, zr, ione, queue[0]); 
     zrnorm = sqrt(zrnorm);
     if (mpinr == 0) {
-        printf( "\n ** BICG with MAGMA batched on multiple GPUs **\n" );
+        printf( "\n ** BICG with MAGMA batched on multiple GPUs (%d GPUs) **\n",gpus_per_proc );
         printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
         printf( "HACApK_bicgstab_lfmtx_flat start\n" );
     }
@@ -598,7 +598,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         }
     }
 
-    for (d=0; d<num_gpus; d++) {
+    for (d=0; d<gpus_per_proc; d++) {
         magma_queue_destroy( queue[d] );
     }
     free(wws_cpu);

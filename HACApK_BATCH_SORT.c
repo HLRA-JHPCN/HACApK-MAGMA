@@ -108,7 +108,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     int name_len;
     char proc_name[300];
     MPI_Get_processor_name( proc_name, &name_len );
-    printf( " processor %d uses %d GPU on %s\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%gpus_per_proc,proc_name);
+    printf( " processor %d uses %d GPU on %s\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%procs_per_node,proc_name);
 
     // number of blocks
     nlf = st_leafmtxp->nlf; 
