@@ -646,13 +646,11 @@ if (st_leafmtxp->mpi_rank == 0)
 printf( "dgemv(%dx%d, %d) (%s)\n",st_leafmtxp->h_M_mgpu[d][num_batch+b], st_leafmtxp->h_N_mgpu[d][num_batch+b],st_leafmtxp->h_lda_mgpu[d][num_batch+b],
        (st_leafmtxp->h_M_mgpu[d][num_batch+b] > st_leafmtxp->h_lda_mgpu[d][num_batch+b] ? "fail" : "ok") );
 #endif
-if (st_leafmtxp->mpi_rank == 0) {
         magmablas_dgemv( st_leafmtxp->transA,
                          st_leafmtxp->h_M_mgpu[d][num_batch+b], st_leafmtxp->h_N_mgpu[d][num_batch+b],
                          one, st_leafmtxp->h_A_mgpu[d][num_batch+b], st_leafmtxp->h_lda_mgpu[d][num_batch+b],
                               st_leafmtxp->h_X_mgpu[d][num_batch+b], 1,
                          one, st_leafmtxp->h_Y_mgpu[d][num_batch+b], 1, queue );
-}
     }
     #endif
     *ip_start = ip_end;
