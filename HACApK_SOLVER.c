@@ -267,8 +267,11 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
         MAGMA_SUCCESS != magma_malloc((void**)&b, (*nd) * sizeof(double)) ) {
       printf( " failed to allocate u or b (nd=%d)\n",*nd );
     }
-    wws_cpu = (double*)malloc((*nd) * sizeof(double));
-    wwr_cpu = (double*)malloc((*nd) * sizeof(double));
+    // use pinned memory for buffer
+    //wws_cpu = (double*)malloc((*nd) * sizeof(double));
+    //wwr_cpu = (double*)malloc((*nd) * sizeof(double));
+    magma_dmalloc_pinned(&wws_cpu, *nd);
+    magma_dmalloc_pinned(&wwr_cpu, *nd);
 
     magma_malloc((void**)&wws, (*nd) * sizeof(double));
     magma_malloc((void**)&wwr, (*nd) * sizeof(double));
@@ -402,8 +405,10 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     }
 
     magma_queue_destroy( queue );
-    free(wws_cpu);
-    free(wwr_cpu);
+    //free(wws_cpu);
+    //free(wwr_cpu);
+    magma_free_pinned(wws_cpu);
+    magma_free_pinned(wwr_cpu);
 
     magma_free(u);
     magma_free(b);
@@ -458,10 +463,12 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         magma_queue_create( cdev, &queue[d] );
     }
     // main GPU
-    wws_cpu = (double*)malloc((*nd) * sizeof(double));
-    wwr_cpu = (double*)malloc((*nd) * sizeof(double));
-
     magma_setdevice(gpu_id);
+
+    // use pinned memory for CPU buffer
+    magma_dmalloc_pinned(&wws_cpu, *nd);
+    magma_dmalloc_pinned(&wwr_cpu, *nd);
+
     magma_malloc((void**)&u, (*nd) * sizeof(double));
     magma_malloc((void**)&b, (*nd) * sizeof(double));
     magma_malloc((void**)&wws, (*nd) * sizeof(double));
@@ -601,8 +608,8 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     for (d=0; d<gpus_per_proc; d++) {
         magma_queue_destroy( queue[d] );
     }
-    free(wws_cpu);
-    free(wwr_cpu);
+    magma_free_pinned(wws_cpu);
+    magma_free_pinned(wwr_cpu);
 
     magma_free(u);
     magma_free(b);
