@@ -248,11 +248,11 @@ endif
   time3 = st21-st3
   time4 = st4-st1
 
-  if ( irank .eq. 0 ) then
-    print*,'before HACApK time = ',sngl(time1),' [sec]'
-    print*,'       HACApK time = ',sngl(time3),' [sec]'
-    print*,'_____________all time = ',sngl(time4),' [sec]'
-  endif
+!  if ( irank .eq. 0 ) then
+!    print*,'before HACApK time = ',sngl(time1),' [sec]'
+!    print*,'       HACApK time = ',sngl(time3),' [sec]'
+!    print*,'_____________all time = ',sngl(time4),' [sec]'
+!  endif
 
 
 

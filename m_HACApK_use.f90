@@ -263,7 +263,6 @@ contains
  real*8,pointer :: param(:)
  real*8,dimension(:),allocatable :: u,b,u_copy,www,ao
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:),lod(:)
- real*8 time_tot, time_spmv, time_mpi
  1000 format(5(a,i10)/)
  2000 format(5(a,1pe15.8)/)
 
@@ -300,14 +299,11 @@ contains
         write(*,*) ' 2: HACApK_gcrm_lfmtx'
       endif
    endif
-#if defined(HAVE_MAGMA_BATCH_v1)
+#if defined(REALLOCATE_MAGMA_BATCH)
 !  allocate/copy to GPU, if have not done it.
    call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
 #endif
 #endif
-   time_tot  = 0.0
-   time_spmv = 0.0
-   time_mpi  = 0.0
    if(param(85)==1)then
 ! SpMV on GPU
      u_copy(:nd) = u(:nd)
@@ -367,7 +363,7 @@ contains
        write(6,*) 
      endif
 
-! C version, all on GPU
+! C version, all on multiple GPUs
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
        call c_HACApK_bicgstab_cax_lfmtx_mgpu(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
@@ -376,6 +372,7 @@ contains
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
        write(6,2000) ' time_c_HACApK on multiple GPUs =',time_bicgstab
+       if(nstp>0)  write(6,2000) '       time_1step  =',time_bicgstab/nstp
        write(6,*) 
      endif
 
@@ -383,15 +380,13 @@ contains
      call HACApK_gcrm_lfmtx(st_leafmtxp,st_ctl,st_bemv,u,b,param,nd,nstp,lrtrn)
    else
    endif
-#if defined(BICG_MAGMA_BATCH) & defined(HAVE_MAGMA_BATCH_v1)
+#if defined(BICG_MAGMA_BATCH) & defined(REALLOCATE_MAGMA_BATCH)
    call MPI_Barrier( icomm, ierr )
    st_measure_time_bicgstab=MPI_Wtime()
      call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
    call MPI_Barrier( icomm, ierr )
    time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
-   if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000)              'time_HACApK_solve  =',time_bicgstab
 #endif
-   if(st_ctl%param(1)>0 .and. mpinr==0 .and. nstp>0)  write(6,2000) '       time_1step  =',time_bicgstab/nstp
    allocate(www(nd))
    sol(:nd)=0.0d0; www(lod(:nd))=u(:nd); sol(:nd)=www(:nd)
    deallocate(www)

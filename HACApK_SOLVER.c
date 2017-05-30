@@ -19,27 +19,27 @@ double c_hacapk_dotp_d(int nd, double *b, double *a) {
 
 void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
                                   double *wws, double *wwr, int *isct, int *irct, int nd, double *time_mpi) {
-   int ione = 1;
-   double one = 1.0;
+    int ione = 1;
+    double one = 1.0;
 
-   double tic;
-   int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset); 
-   int mpinr = lpmd[2]; 
-   int nrank = lpmd[1]; 
+    double tic;
+    int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset); 
+    int mpinr = lpmd[2]; 
+    int nrank = lpmd[1]; 
    
-   int *lsp = (int*)((void*)st_ctl->param + st_ctl->lsp_offset);
-   int *lnp = (int*)((void*)st_ctl->param + st_ctl->lnp_offset);
-   MPI_Comm icomm = MPI_COMM_WORLD;
-   if (nrank > 1) {
-       int ncdp = (mpinr+1)%nrank;
-       int ncsp = (mpinr+nrank-1)%nrank;
-       isct[0] = lnp[mpinr];
-       isct[1] = lsp[mpinr];
+    int *lsp = (int*)((void*)st_ctl->param + st_ctl->lsp_offset);
+    int *lnp = (int*)((void*)st_ctl->param + st_ctl->lnp_offset);
+    MPI_Comm icomm = MPI_COMM_WORLD;
+    if (nrank > 1) {
+        int ncdp = (mpinr+1)%nrank;
+        int ncsp = (mpinr+nrank-1)%nrank;
+        isct[0] = lnp[mpinr];
+        isct[1] = lsp[mpinr];
 
-       dlacpy_( "F", &lnp[mpinr], &ione, &zau[lsp[mpinr]-1], &lnp[mpinr], wws, &lnp[mpinr] );
+        dlacpy_( "F", &lnp[mpinr], &ione, &zau[lsp[mpinr]-1], &lnp[mpinr], wws, &lnp[mpinr] );
 
-       int ic;
-       for (ic=1; ic<nrank; ic++) {
+        int ic;
+        for (ic=1; ic<nrank; ic++) {
            MPI_Status stat;
 
            tic = MPI_Wtime();
@@ -52,26 +52,42 @@ void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_leafmtxp *st_leafmtxp,
            dlacpy_( "F", &irct[0], &ione, wwr, &irct[0], wws, &irct[0] );
            isct[0] = irct[0];
            isct[1] = irct[1];
-       }
+        }
     }
 }
 
-void c_hacapk_adot_cax_lfmtx_comm_gpu(double *zau_gpu, double *zau, stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
+void c_hacapk_adot_cax_lfmtx_comm_gpu(double *zau_gpu, double *zau,
+                                      stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
                                       double *wws, double *wwr, int *isct, int *irct, int nd, 
                                       double *time_copy, double *time_mpi, magma_queue_t queue) {
     double tic;
+    int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset); 
+    int mpinr = lpmd[2]; 
+    int nrank = lpmd[1]; 
 
-    magma_queue_sync( queue );
-    tic = MPI_Wtime();
-    magma_dgetvector( nd, zau_gpu, 1, zau, 1, queue );
-    *time_copy += MPI_Wtime()-tic;
+    if (nrank > 1) {
+        int *lsp = (int*)((void*)st_ctl->param + st_ctl->lsp_offset);
+        int *lnp = (int*)((void*)st_ctl->param + st_ctl->lnp_offset);
 
-    c_hacapk_adot_cax_lfmtx_comm(zau, st_leafmtxp, st_ctl, wws,wwr, isct,irct, nd,time_mpi);
+        magma_queue_sync( queue );
+        tic = MPI_Wtime();
+#if 0
+        magma_dgetvector( nd, zau_gpu, 1, zau, 1, queue );
+#else
+        int ione = 1;
+        double zero = 0.0;
+        dlaset_( "F", &nd, &ione, &zero, &zero, zau, &nd );
+        magma_dgetvector( lnp[mpinr], &zau_gpu[lsp[mpinr]-1], 1, &zau[lsp[mpinr]-1], 1, queue );
+#endif
+        *time_copy += MPI_Wtime()-tic;
 
-    magma_queue_sync( queue );
-    tic = MPI_Wtime();
-    magma_dsetvector( nd, zau, 1, zau_gpu, 1, queue );
-    *time_copy += MPI_Wtime()-tic;
+        c_hacapk_adot_cax_lfmtx_comm(zau, st_leafmtxp, st_ctl, wws,wwr, isct,irct, nd,time_mpi);
+
+        magma_queue_sync( queue );
+        tic = MPI_Wtime();
+        magma_dsetvector( nd, zau, 1, zau_gpu, 1, queue );
+        *time_copy += MPI_Wtime()-tic;
+    }
 }
 
 
