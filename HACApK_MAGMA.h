@@ -135,10 +135,13 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
 
 void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp,
                                                  magma_queue_t *queue);
-void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, 
+                                         stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl, 
+                                         double *zu, double *zbu,
                                          double *zau_cpu, double *zu_cpu,
-                                         double *time_batch, double *time_set, double *time_copy, int on_gpu,
-                                         magma_queue_t *queue);
+                                         double *time_batch, double *time_set, double *time_copy,
+double *time_set2, double *time_set3,
+                                         int on_gpu, magma_queue_t *queue);
 
 int hacapk_size_sorter(const void* arg1,const void* arg2);
 int hacapk_size_sorter_trans(const void* arg1,const void* arg2);

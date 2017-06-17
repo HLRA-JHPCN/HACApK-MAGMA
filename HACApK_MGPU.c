@@ -610,10 +610,13 @@ int c_hacapk_adot_body_lfmtx_mgpu_dgemv(int d, int ip,
     return 0;
 }
 
-void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, 
+                                         stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
+                                         double *zu, double *zbu,
                                          double *zau_cpu, double *zu_cpu,
-                                         double *time_batch, double *time_set, double *time_copy, int on_gpu,
-                                         magma_queue_t *queue) {
+                                         double *time_batch, double *time_set, double *time_copy,
+double *time_set2, double *time_set3,
+                                         int on_gpu, magma_queue_t *queue) {
     // constants
     double zero = 0.0;
 
@@ -658,6 +661,7 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_le
         magma_queue_sync( queue[d] );
     }
     *time_set += (MPI_Wtime()-tic);
+*time_set2 += (MPI_Wtime()-tic);
     tic = MPI_Wtime();
     #endif
     fflush(stdout);
@@ -693,19 +697,67 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_le
     tic = MPI_Wtime();
     #endif
     // vectors are on GPU, accumulate on the main GPU
-    for (d=0; d<gpus_per_proc; d++) {
-        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
-        if (d == 0) {
-            magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, st_leafmtxp->zau_mgpu[d], st_leafmtxp->m,
-                              zau, st_leafmtxp->m, queue[d] );
-        } else {
-            magma_dgetvector( st_leafmtxp->m, 
-                              st_leafmtxp->zau_mgpu[d], 1, zau_cpu, 1, queue[d] );
+#if 0
+    int mloc   = st_leafmtxp->m;
+    int offset = 0;
+#else
+    int mpinr = st_leafmtxp->mpi_rank;
+    int *lsp = (int*)((void*)st_ctl->param + st_ctl->lsp_offset);
+    int *lnp = (int*)((void*)st_ctl->param + st_ctl->lnp_offset);
 
-            magma_setdevice( get_device_id(st_leafmtxp) );
-            magma_dsetvector( st_leafmtxp->m,
-                              zau_cpu, 1, st_leafmtxp->zau_mgpu[0], 1, queue[0] );
-            magma_daxpy( st_leafmtxp->m, 1.0, st_leafmtxp->zau_mgpu[0], 1, zau, 1, queue[0] );
+    int mloc   = lnp[mpinr];
+    int offset = lsp[mpinr]-1;
+#endif
+    int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset);
+    int nrank = lpmd[1];
+    #define ACCUM_ON_CPU
+    #if defined(ACCUM_ON_CPU)
+    if (nrank > 1) {
+        int ione = 1;
+        double one = 1.0;
+        magma_setdevice( get_device_id(st_leafmtxp) );
+        dlaset_( "F", &(st_leafmtxp->gn), &ione, &zero, &zero, zau_cpu, &(st_leafmtxp->gn) );
+        magma_dgetvector_async( mloc, &(st_leafmtxp->zau_mgpu[0][offset]), 1, 
+                                      &(zau_cpu[offset]), 1, queue[0] );
+        for (d=1; d<gpus_per_proc; d++) {
+            magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+            magma_dgetvector_async( mloc, &(st_leafmtxp->zau_mgpu[d][offset]), 1, 
+                                          &(zu_cpu[(d-1)*mloc]), 1, queue[d] );
+        }
+        magma_setdevice( get_device_id(st_leafmtxp) );
+        magma_queue_sync( queue[0] );
+        for (d=1; d<gpus_per_proc; d++) {
+            magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+            magma_queue_sync( queue[d] );
+            daxpy_( &mloc, &one, &(zu_cpu[(d-1)*mloc]), &ione, &(zau_cpu[offset]), &ione );
+        }
+        magma_setdevice( get_device_id(st_leafmtxp) );
+        magma_dsetvector_async( mloc, &(zau_cpu[offset]), 1, 
+                                &(zau[offset]), 1, queue[0] );
+    } else 
+    #endif
+    {
+        // accumulate on GPU
+        magma_setdevice( get_device_id(st_leafmtxp) );
+        magmablas_dlacpy( MagmaFull, mloc, 1, 
+                          &(st_leafmtxp->zau_mgpu[0][offset]), mloc,
+                          &(zau[offset]), mloc, queue[0] );
+        if (gpus_per_proc > 1) {
+            for (d=1; d<gpus_per_proc; d++) {
+                magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+                magma_dgetvector_async( mloc, &(st_leafmtxp->zau_mgpu[d][offset]), 1, 
+                                              &(zu_cpu[(d-1)*mloc]), 1, queue[d] );
+            }
+            for (d=1; d<gpus_per_proc; d++) {
+                magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+                magma_queue_sync( queue[d] );
+
+                magma_setdevice( get_device_id(st_leafmtxp) );
+                magma_dsetvector_async( mloc, &(zu_cpu[(d-1)*mloc]), 1, 
+                                              &(st_leafmtxp->zau_mgpu[0][offset]), 1, queue[0] );
+                magma_daxpy( mloc, 1.0, &(st_leafmtxp->zau_mgpu[0][offset]), 1, 
+                                        &(zau[offset]), 1, queue[0] );
+            }
         }
     }
     // set back to main GPU
@@ -715,6 +767,7 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, stc_HACApK_leafmtxp *st_le
         magma_queue_sync( queue[d] );
     }
     *time_set += MPI_Wtime()-tic;
+*time_set3 += MPI_Wtime()-tic;
     #endif
     magma_setdevice( get_device_id(st_leafmtxp) );
 
