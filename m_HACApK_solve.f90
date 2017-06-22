@@ -358,6 +358,7 @@ end subroutine HACApK_bicgstab_lfmtx
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  integer*4 :: isct(2),irct(2)
  real*8 time_tot, time_spmv, time_mpi, time_batch, time_set, time_copy, tic
+ integer step
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
  lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;lthr(0:) => st_ctl%lthr
