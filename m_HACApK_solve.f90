@@ -357,8 +357,8 @@ end subroutine HACApK_bicgstab_lfmtx
  real*8,dimension(:),allocatable :: wws,wwr
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  integer*4 :: isct(2),irct(2)
- real*8 time_tot, time_spmv, time_mpi, time_batch, time_set, time_copy, tic
- integer step
+ real*8 :: time_tot, time_spmv, time_mpi, time_batch, time_set, time_copy, tic
+ integer :: step
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
  lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;lthr(0:) => st_ctl%lthr
@@ -460,12 +460,12 @@ end subroutine HACApK_bicgstab_lfmtx
  if(st_ctl%param(1)>0 .and. mpinr==0)then
     step = in
     write(6,*)'TIME_BiCG_ALL',time
-    write(6,2222)'TIME_BiCG_ITER',time, step, time/step
-    write(6,2222)'TIME_BiCG_MPI',time_mpi, step, time_mpi/step
-    write(6,2222)'TIME_BiCG_MATVEC',time_spmv, step, time_spmv/step
-    write(6,2222)'TIME_BiCG_MATVEC_COPY',time_copy, step, time_copy/step
-    write(6,2222)'TIME_BiCG_MATVEC_SET',time_set, step, time_set/step
-    write(6,2222)'TIME_BiCG_MATVEC_BATCH',time_batch, step, time_batch/step
+    write(6,2222)'TIME_BiCG_ITER',time, step, time/dble(step)
+    write(6,2222)'TIME_BiCG_MPI',time_mpi, step, time_mpi/dble(step)
+    write(6,2222)'TIME_BiCG_MATVEC',time_spmv, step, time_spmv/dble(step)
+    write(6,2222)'TIME_BiCG_MATVEC_COPY',time_copy, step, time_copy/dble(step)
+    write(6,2222)'TIME_BiCG_MATVEC_SET',time_set, step, time_set/dble(step)
+    write(6,2222)'TIME_BiCG_MATVEC_BATCH',time_batch, step, time_batch/dble(step)
  endif
 end subroutine HACApK_bicgstab_cax_lfmtx_hyp
 
