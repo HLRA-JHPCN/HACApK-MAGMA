@@ -455,6 +455,17 @@ end subroutine HACApK_bicgstab_lfmtx
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_copy  =',time_copy
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_set   =',time_set
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_batch =',time_batch
+ 2222 format(a,x,1pe12.4,x,i,x,1pe12.4)
+ if(st_ctl%param(1)>0 .and. mpinr==0)then
+    step = in
+    write(6,*)'TIME_BiCG_ALL',time
+    write(6,2222)'TIME_BiCG_ITER',time, step, time/step
+    write(6,2222)'TIME_BiCG_MPI',time_mpi, step, time_mpi/step
+    write(6,2222)'TIME_BiCG_MATVEC',time_spmv, step, time_spmv/step
+    write(6,2222)'TIME_BiCG_MATVEC_COPY',time_copy, step, time_copy/step
+    write(6,2222)'TIME_BiCG_MATVEC_SET',time_set, step, time_set/step
+    write(6,2222)'TIME_BiCG_MATVEC_BATCH',time_batch, step, time_batch/step
+ endif
 end subroutine HACApK_bicgstab_cax_lfmtx_hyp
 
 !***HACApK_bicgstab_lfmtx_hyp
@@ -878,7 +889,7 @@ end function HACApK_adot_pmt_lfmtx_hyp
  real*8 en_measure_time, st_measure_time, time
  integer step, mstep
  integer mpinr, nrank, icomm, ierr
- real*8 time_spmv, time_mpi, time_batch, time_set, time_copy, tic
+ real*8 time_spmv, time_mpi, time_batch, time_set, time_copy, tic, time_iter
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
 ! 
@@ -920,6 +931,14 @@ end function HACApK_adot_pmt_lfmtx_hyp
  if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
  if(mpinr==0) flush(output_unit)
  if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_bicgstab_lfmtx_flat start'
+
+ time_spmv = 0.0 
+ time_mpi = 0.0 
+ time_batch = 0.0 
+ time_set = 0.0
+ time_copy = 0.0
+ time_iter = MPI_Wtime()
+
  do step=1,mstep
    if(zrnorm/bnorm<eps) exit
    zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
@@ -961,6 +980,7 @@ end function HACApK_adot_pmt_lfmtx_hyp
  call MPI_Barrier( icomm, ierr )
  en_measure_time = MPI_Wtime()
  time = en_measure_time - st_measure_time
+ time_iter = en_measure_time - time_iter
 ! delete matrix
  call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
  2001 format(5(a,1pe15.8)/)
@@ -972,6 +992,16 @@ end function HACApK_adot_pmt_lfmtx_hyp
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_copy  =',time_copy
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_set   =',time_set
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_batch =',time_batch
+ 2222 format(a,x,1pe12.4,x,i,x,1pe12.4)
+ if(st_ctl%param(1)>0 .and. mpinr==0)then
+    write(6,*)'TIME_BiCG_ALL',time
+    write(6,2222)'TIME_BiCG_ITER',time_iter, step, time_iter/step
+    write(6,2222)'TIME_BiCG_MPI',time_mpi, step, time_mpi/step
+    write(6,2222)'TIME_BiCG_MATVEC',time_spmv, step, time_spmv/step
+    write(6,2222)'TIME_BiCG_MATVEC_COPY',time_copy, step, time_copy/step
+    write(6,2222)'TIME_BiCG_MATVEC_SET',time_set, step, time_set/step
+    write(6,2222)'TIME_BiCG_MATVEC_BATCH',time_batch, step, time_batch/step
+ endif
 end subroutine HACApK_bicgstab_cax_lfmtx_flat
 ! 
 !***HACApK_adot_cax_lfmtx_comm

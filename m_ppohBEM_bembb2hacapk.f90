@@ -105,7 +105,7 @@ contains
     zgmid(il,2) = (np(n1)%y+np(n2)%y+np(n3)%y)/3.0d0
     zgmid(il,3) = (np(n1)%z+np(n2)%z+np(n3)%z)/3.0d0
 !***************************************************
-    rhs(il)=zgmid(il,3)
+!    rhs(il)=zgmid(il,3)
 !***************************************************
   enddo
   bembb2hacapk= hacapk_gensolv(st_leafmtxp,st_bemv,st_ctl,zgmid,rhs,sol,ztol)

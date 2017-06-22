@@ -79,8 +79,8 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
     int nlf, ndl, ndt, nstrtl, nstrtt, kt;
     int st_lf_stride = st_leafmtxp->st_lf_stride;
  
-    //#define GPU
-    #define CPU
+    #define GPU
+    //#define CPU
     #if defined(GPU)
     // allocate queue
     magma_device_t cdev;
