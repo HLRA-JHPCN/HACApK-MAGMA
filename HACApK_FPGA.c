@@ -2049,8 +2049,9 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     double eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm;
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
-    int mpinr, nrank, icomm, ierr;
+    int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+    MPI_Comm icomm;
  
     mstep = param[82];
     eps = param[90];
