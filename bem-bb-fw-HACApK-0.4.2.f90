@@ -285,10 +285,16 @@ contains
     integer, intent(out) :: nrank
     integer, intent(in)  :: comm
     integer, intent(out) :: ierr
+    integer required, provided
+    required = MPI_THREAD_FUNNELED
 
-    call MPI_Init ( ierr )
+!    call MPI_Init ( ierr )
+    call MPI_Init_thread ( required, provided, ierr )
     if( ierr .ne. 0 ) then
       print*, 'Error: MPI_Init failed !!!'
+    endif
+    if(required.ne.provided)then
+       write(*,*)"Warning: MPI_THREAD_FUNNELED is not supported"
     endif
 
     call MPI_Comm_size ( comm, nrank, ierr )
