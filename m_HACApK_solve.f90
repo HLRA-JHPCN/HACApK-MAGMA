@@ -766,6 +766,57 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
  deallocate(wws)
 end subroutine HACApK_measurez_time_ax_FPGA_lfmtx
 !
+
+
+subroutine HACApK_setupc(st_leafmtxp,st_ctl,nd,nstp,lrtrn) bind(C)
+ use, intrinsic ::  iso_c_binding
+#ifdef HAVE_MAGMA_PINNED
+ use cudafor
+#endif
+ include 'mpif.h'
+ type(st_HACApK_leafmtxp) :: st_leafmtxp
+ type(st_HACApK_lcontrol) :: st_ctl
+#ifdef HAVE_MAGMA_PINNED
+ real*8,dimension(:),allocatable, pinned :: wws,wwr,u,v,b
+#else
+ real*8,dimension(:),allocatable :: wws,wwr,u,v,b
+#endif
+ integer*4 :: isct(2),irct(2)
+ real*8,pointer :: param(:)
+ integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
+!!!
+ type(st_HACApk_leafmtx),pointer :: tmpleafmtx(:)
+ type(st_HACApk_leafmtxp) :: tmpleafmtxp
+ pointer (stpt, tmpleafmtxp)
+ real*8 :: tmptmpa1
+ real*8 :: enorm,unorm
+ real*8 :: rnorm_g,enorm_g,unorm_g
+ character(len=50) :: ErrFormat
+ pointer (a1pt, tmptmpa1)
+ integer*8 :: stpt2, a2pt
+ real*8 time_copy, time_set, time_batch
+!!!
+ 1000 format(5(a,i10)/)
+ 2000 format(5(a,f10.4)/)
+
+ lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;lthr(0:) => st_ctl%lthr; param=>st_ctl%param(:)
+ mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1)
+ mstep=param(99)
+!!! 
+ tmpleafmtx => st_leafmtxp%st_lf
+ stpt=loc(tmpleafmtx(1))
+ stpt2 = stpt
+ stpt = loc(tmpleafmtx(2))
+ st_leafmtxp%st_lf_stride = stpt-stpt2
+
+ do ill=1,st_leafmtxp%nlf
+    a1pt = loc(tmpleafmtx(ill)%a2(:,:))
+    a2pt = a1pt
+    a1pt = loc(tmpleafmtx(ill)%a1(:,:))
+    tmpleafmtx(ill)%a1size =a2pt-a1pt
+ enddo
+end subroutine HACApK_setupc
+
 !
 !***HACApK_measurez_time_ax_FPGA_lfmtx
 subroutine HACApK_measurez_time_check(st_leafmtxp,st_ctl,nd,nstp,lrtrn) bind(C)

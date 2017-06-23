@@ -67,21 +67,22 @@ contains
  en_measure_time_ax=MPI_Wtime()
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000) 'lfmtx; time_AX_once  =',(en_measure_time_ax - st_measure_time_ax)/st_ctl%param(99)
 !
- if(mpinr==0)then
-    write(*,*)"******** ******** ******** ******** ******** ******** ******** ********"
-    write(*,*)"HACApK_measurez_time_ax_FPGA_lfmtx"
-    write(*,*)"******** ******** ******** ******** ******** ******** ******** ********"
- endif
- st_measure_time_ax=MPI_Wtime()
- call HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
- en_measure_time_ax=MPI_Wtime()
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000) 'lfmtx; time_FPGA_AX_once  =',(en_measure_time_ax - st_measure_time_ax)/st_ctl%param(99)
+!! if(mpinr==0)then
+!!    write(*,*)"******** ******** ******** ******** ******** ******** ******** ********"
+!!    write(*,*)"HACApK_measurez_time_ax_FPGA_lfmtx"
+!!    write(*,*)"******** ******** ******** ******** ******** ******** ******** ********"
+!! endif
+!! st_measure_time_ax=MPI_Wtime()
+!! call HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
+!! en_measure_time_ax=MPI_Wtime()
+!! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000) 'lfmtx; time_FPGA_AX_once  =',(en_measure_time_ax - st_measure_time_ax)/st_ctl%param(99)
 !
  if(mpinr==0)then
     write(*,*)"******** ******** ******** ******** ******** ******** ******** ********"
     write(*,*)"HACApK_solve_cax"
     write(*,*)"******** ******** ******** ******** ******** ******** ******** ********"
  endif
+ call HACApK_setupc(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
  call MPI_Barrier( icomm, ierr )
  sol(:)=0.0d0
  lrtrn=HACApK_solve_cax(st_leafmtxp,st_bemv,st_ctl,rhs,sol,ztol)
