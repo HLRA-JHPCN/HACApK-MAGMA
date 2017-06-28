@@ -282,7 +282,7 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  type(st_HACApK_calc_entry) :: st_bemv
  type(st_HACApK_lcontrol) :: st_ctl
  integer,optional :: icomma
- character*32 logfile
+ character*64 logfile
 #ifdef HAVE_PaRSEC_SUBCOMM
  integer my_rank(1)  ! MPI_Comm
  integer my_comm     ! MPI_Comm
@@ -346,10 +346,9 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
 #endif
 #endif
  nthr=1
-!$omp parallel
-  nthr = omp_get_num_threads()
+!  nthr = omp_get_num_threads()
+  nthr = 1
   if(nthr>0) st_ctl%lpmd(20)=nthr
-!$omp end parallel
  allocate(st_ctl%lod(nd),st_ctl%lthr(nthr+1),st_ctl%lnp(nrank),st_ctl%lsp(nrank),stat = ierr)
  
  call MPI_Barrier( icomm, ierr )
@@ -726,13 +725,11 @@ endfunction
    lcol_msk(jst)=1
    ist=istn; nrow_done=nrow_done+1; ncol_done=ncol_done+1
    if(abs(row_maxval)<ACA_EPS .and. abs(col_maxval)<ACA_EPS .and. k>=param(64)) then
-!$omp critical
      print *, 'ACA_EPS=',ACA_EPS
      print *, 'abs(row_maxval)=',abs(row_maxval)
      print *, 'abs(col_maxval)=',abs(col_maxval)
      print *, 'stop HACApK_aca 3';
 !!!     stop
-!$omp end critical
      goto 9999
    endif
    zeps=HACApK_unrm_d(ndl,pcol)*HACApK_unrm_d(ndt,prow)
@@ -760,14 +757,12 @@ endfunction
  HACApK_aca=k
 ! print*,'HACApK_aca=',aca
   if(zeps>eps .and. k<krank)then
-!$omp critical
     print *,'k=',k
     print *,'zeps=',zeps
     print *,'eps=',eps
     write(6,1000) 'nstrtl=',nstrtl,' nstrtt=',nstrtt,' ndl=',ndl,' ndt=',ndt
     print*,'znrm=',znrm
     stop
-!$omp end critical
   endif
 ! stop
  endfunction
@@ -931,9 +926,7 @@ endfunction
         elseif(param(61)==2 .or. param(61)==3)then
           apxnorm =znrm
         else
-!$omp critical
           print*,'ERROR!:: invalid param(61)=',param(61)
-!$omp end critical
           stop
         endif
       else
@@ -944,10 +937,8 @@ endfunction
       endif
     endif
   if(.false.)then
-!$omp critical
     print*,'pcol'; print*,pcol
     print*,'prow'; print*,prow
-!$omp end critical
   endif
     if(lstop_aca==1 .and. k>=param(64)) exit
     k=k+1
@@ -957,14 +948,12 @@ endfunction
 !  endif
   
   if(k<param(64))then
-!$omp critical
     print*, 'colnorm=',colnorm,' rownorm=',rownorm,'ACA_EPS=',ACA_EPS
     print*, 'col_maxval=',col_maxval,' row_maxval=',row_maxval
     print*, 'ntries_row=',ntries_row,' ntries_col=',ntries_col,' ntries=',ntries
     print*, 'k=',k
 !    k=k-1; if(k<1) stop
 !    stop
-!$omp end critical
   endif
   deallocate(lrow_msk,lcol_msk,pa_ref,pb_ref)
   HACApK_acaplus=k
@@ -983,12 +972,10 @@ endfunction
  real*8, allocatable :: zab(:,:),zaa(:,:)
  1000 format(5(a,i12)/)
  eps=param(71); ACA_EPS=param(72)*eps; kparam=param(63)
-!$OMP parallel default(none) &
-!$OMP          shared(st_lf,lodl,st_bemv,znrmmat,lodt,lthr,param) &
-!$OMP          private(zab,zaa,kt,ith,ith1,nths,nthr,nthe,ltmtx,ierr,ndl,ndt,ns,nstrtl,nstrtt,ip,il,it,ill,itt) &
-!$OMP          firstprivate(eps, ACA_EPS, kparam)
- ith = omp_get_thread_num()
- nthr = omp_get_num_threads()
+! ith = omp_get_thread_num()
+! nthr = omp_get_num_threads()
+ ith = 0
+ nthr = 1
  if(nthr == 0) write(* ,*) nthr ,ith
  !$OMP barrier
  ith1 = ith+1
@@ -1000,10 +987,8 @@ endfunction
    if(ltmtx==1)then
      allocate(zab(ndt,kparam),zaa(ndl,kparam),stat=ierr)
      if(ierr.ne.0) then
-!$omp critical
         write(*,*) 'sub HACApK_fill_leafmtx_p; zab,zaa Memory allocation failed !'
         write(*,1000) 'ip=ip',ip,' ierr=',ierr
-!$omp end critical
         stop 10
      endif
      if(param(60)==1)then
@@ -1015,18 +1000,14 @@ endfunction
        stop
      endif
      if(kt>kparam-1) then
-!!!$omp critical
 !        write(*,1000) 'WARNING: Insufficient k: kt=',kt,', kparam=',kparam, &
 !                      ' nstrtl=',nstrtl,' nstrtt=',nstrtt,' ndl=',ndl,' ndt=',ndt
-!!!$omp end critical
      endif
      st_lf(ip)%kt=kt
      allocate(st_lf(ip)%a1(ndt,kt),st_lf(ip)%a2(ndl,kt),stat=ierr)
      if(ierr.ne.0) then
-!$omp critical
         write(*,*) 'sub HACApK_fill_leafmtx_p; a1,a2 Memory allocation failed !'
         write(*,*) 'ip=ip',ip,' ierr=',ierr
-!$omp end critical
         stop 20
      endif
      st_lf(ip)%a1(1:ndt,1:kt)=zab(1:ndt,1:kt)
@@ -1035,10 +1016,8 @@ endfunction
    elseif(ltmtx==2)then
      allocate(st_lf(ip)%a1(ndt,ndl),stat=ierr)
      if(ierr.ne.0) then
-!$omp critical
         write(*,*) 'sub HACApK_fill_leafmtx_p; a2 Memory allocation failed !'
         write(*,*) 'ip=ip',ip,' ierr=',ierr
-!$omp end critical
         stop 30
      endif
      do il=1,ndl; ill=il+nstrtl-1
@@ -1047,12 +1026,9 @@ endfunction
        enddo
      enddo
    else
-!$omp critical
       write(*,1000) 'HACApK_fill_leafmtx_hyp; ip=',ip,' ltmtx=',ltmtx
-!$omp end critical
    endif
  enddo
-!$omp end parallel
  do ip=1,nlf
    ndl=st_lf(ip)%ndl; nstrtl=st_lf(ip)%nstrtl
    if(nstrtl<lnps) lnps=nstrtl

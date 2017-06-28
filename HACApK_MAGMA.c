@@ -64,6 +64,14 @@ void  c_hacapk_adot_body_lfmtx_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, d
 // /////////////////////////////////////////////////////////////////////////
 #if defined(HAVE_MAGMA)
 
+void magma_init_() {
+    magma_init();
+}
+
+void magma_finalize_() {
+    magma_finalize();
+}
+
 /////////////////////////////////////////////////////
 // MatVec on GPU
 void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu) {
@@ -227,7 +235,9 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
     int st_lf_stride = st_leafmtxp->st_lf_stride;
 
     // let me initialize here for now..
+#ifdef MAGMA_INIT_PER
     magma_init();
+#endif
     //st_leafmtxp->mpi_comm = MPI_COMM_WORLD; // comm world for now
     MPI_Comm_rank(MPI_COMM_WORLD, &(st_leafmtxp->mpi_rank));
     if (st_leafmtxp->mpi_rank == 0) magma_print_environment();
@@ -379,7 +389,9 @@ void  c_hacapk_adot_body_lfdel_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
     }
 
     // let me finalize it here for now
+#ifdef MAGMA_INIT_PER
     magma_finalize();
+#endif
     #endif
 }
 #endif

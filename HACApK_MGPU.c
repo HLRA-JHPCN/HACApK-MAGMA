@@ -494,6 +494,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
             }
         }
     }
+    free(dA);
+    free(max_m);
+    free(max_n);
     free(owner);
     free(work);
 
@@ -526,6 +529,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
         num_batch_mgpu[d] -= count[d]; // remove the extras at the end of each batch
         magma_queue_sync(queues[d]);
     }
+    free(count);
     // main GPU
     magma_setdevice(get_device_id(st_leafmtxp));
 
@@ -549,6 +553,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
     for (d=0; d<gpus_per_proc; d++) {
         free(saved_sz_mgpu[d]);
     }
+    free(total_size_a_mgpu);
+    free(total_size_y_mgpu);
     free(saved_sz_mgpu);
 }
 
@@ -687,6 +693,8 @@ double *time_set2, double *time_set3,
         }
         count ++;
     }
+    free(num_batch);
+    free(ip_d);
     // stop timer
     #ifdef PROF_MAGMA_BATCH
     for (d=0; d<gpus_per_proc; d++) {
@@ -781,6 +789,68 @@ double *time_set2, double *time_set3,
     }
     fflush(stdout);
     #endif
+}
+
+void  c_hacapk_adot_body_lfdel_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
+    int d;
+    if (st_leafmtxp->max_block > 0) {
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_free(st_leafmtxp->zbu_mgpu[d]);
+        }
+        free(st_leafmtxp->zbu_mgpu);
+    }
+    if (st_leafmtxp->m > 0) {
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_free(st_leafmtxp->zau_mgpu[d]);
+        }
+        free(st_leafmtxp->zau_mgpu);
+    }
+    if (st_leafmtxp->n > 0) {
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_free(st_leafmtxp->zu_mgpu[d]);
+        }
+        free(st_leafmtxp->zu_mgpu);
+    }
+
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_free(st_leafmtxp->d_A_mgpu[d]);
+        magma_free(st_leafmtxp->d_X_mgpu[d]);
+        magma_free(st_leafmtxp->d_Y_mgpu[d]);
+        magma_free(st_leafmtxp->d_M_mgpu[d]);
+        magma_free(st_leafmtxp->d_N_mgpu[d]);
+        magma_free(st_leafmtxp->d_lda_mgpu[d]);
+        magma_free(st_leafmtxp->d_inc_mgpu[d]);
+
+        magma_free_cpu(st_leafmtxp->h_A_mgpu[d]);
+        magma_free_cpu(st_leafmtxp->h_M_mgpu[d]);
+        magma_free_cpu(st_leafmtxp->h_N_mgpu[d]);
+        magma_free_cpu(st_leafmtxp->h_lda_mgpu[d]);
+        magma_free_cpu(st_leafmtxp->h_X_mgpu[d]);
+        magma_free_cpu(st_leafmtxp->h_Y_mgpu[d]);
+    }
+    free(st_leafmtxp->d_A_mgpu);
+    free(st_leafmtxp->d_X_mgpu);
+    free(st_leafmtxp->d_Y_mgpu);
+    free(st_leafmtxp->d_M_mgpu);
+    free(st_leafmtxp->d_N_mgpu);
+    free(st_leafmtxp->d_lda_mgpu);
+    free(st_leafmtxp->d_inc_mgpu);
+
+    free(st_leafmtxp->h_M_mgpu);
+    free(st_leafmtxp->h_N_mgpu);
+    free(st_leafmtxp->h_lda_mgpu);
+    free(st_leafmtxp->h_A_mgpu);
+    free(st_leafmtxp->h_X_mgpu);
+    free(st_leafmtxp->h_Y_mgpu);
+
+    free(st_leafmtxp->max_M_mgpu);
+    free(st_leafmtxp->max_N_mgpu);
+    free(st_leafmtxp->nlf_mgpu);
+    free(st_leafmtxp->num_batch_mgpu);
+    free(st_leafmtxp->batch_order);
+
+    // let me finalize it here for now
+    magma_finalize();
 }
 
 #endif

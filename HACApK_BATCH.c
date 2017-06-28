@@ -461,7 +461,9 @@ void  c_hacapk_adot_body_lfcpy_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     int st_lf_stride = st_leafmtxp->st_lf_stride;
 
     // let me initialize here for now..
+#ifdef MAGMA_INIT_PER
     magma_init();
+#endif
     //st_leafmtxp->mpi_comm = MPI_COMM_WORLD; // comm world for now
     MPI_Comm_rank(MPI_COMM_WORLD, &(st_leafmtxp->mpi_rank));
     if (st_leafmtxp->mpi_rank == 0) magma_print_environment();
@@ -825,8 +827,11 @@ void  c_hacapk_adot_body_lfdel_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
         magma_free_cpu(st_leafmtxp->h_X_array_streamed);
         magma_free_cpu(st_leafmtxp->h_Y_array_streamed);
     }
+    free(st_leafmtxp->batch_order);
     // let me finalize it here for now
+#ifdef MAGMA_INIT_PER
     magma_finalize();
+#endif
 }
 
 #endif

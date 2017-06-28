@@ -94,7 +94,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     int st_lf_stride = st_leafmtxp->st_lf_stride;
 
     // let me initialize here for now..
+#ifdef MAGMA_INIT_PER
     magma_init();
+#endif
     //st_leafmtxp->mpi_comm = MPI_COMM_WORLD; // comm world for now
     MPI_Comm_rank(MPI_COMM_WORLD, &(st_leafmtxp->mpi_rank));
     if (st_leafmtxp->mpi_rank == 0) magma_print_environment();

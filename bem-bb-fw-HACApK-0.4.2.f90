@@ -286,7 +286,9 @@ contains
     integer, intent(in)  :: comm
     integer, intent(out) :: ierr
 
-    call MPI_Init ( ierr )
+    !call MPI_Init ( ierr )
+    integer :: provided
+    call MPI_Init_thread ( MPI_THREAD_MULTIPLE, provided, ierr )
     if( ierr .ne. 0 ) then
       print*, 'Error: MPI_Init failed !!!'
     endif
@@ -659,13 +661,10 @@ contains
     allocate( ppohBEM_rhs(ext_ndim), stat = ierr )
     allocate( ppohBEM_sol(ext_ndim), stat = ierr )
 
-
-!!!!!!!!!!!! Thread parallelization starts !!!!!!!!!!!!
-!$omp parallel private(thr_dim, thr_dim1, ith, nth, mth, j_st, j_en, i, j)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    ith = omp_get_thread_num()
-    nth = omp_get_num_threads()
+!    ith = omp_get_thread_num()
+!    nth = omp_get_num_threads()
+    ith = 0
+    nth = 1
 
     if ( ith.eq.0 .and. irank.eq.0 ) then
       print*, 'Number of total threads, Thread number ', nth, ith
@@ -692,13 +691,11 @@ contains
     endif
 
   if(ldense)then
-  !$omp do private(j) schedule(static)
     do i = lhp, ltp
       do j = 1, ext_ndim
         ppohBEM_a(j,i) = 0.0d0
       enddo
     enddo
-  !$omp end do
   endif
     if( ltp .gt. ndim ) then
       ltp = ndim
@@ -732,12 +729,6 @@ contains
 
       ppohBEM_sol(j) = 0.0d0
     enddo
-
-!!!!!!!!!!!!!!!!!!
-!$omp end parallel
-!!!!!!!!!!!!!!!!!!
-!    print*,'sub Make_equation_data end'
-
   end subroutine   !!!! subroutine Make_equation_data
 
 
@@ -866,12 +857,10 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!$omp parallel &
-!$omp private(step,i,j,alpha,beta,zeta,nom,den,nomold,rnorm,bnorm,thr_dim,thr_dim1,ith,nth,inth,mth,j_st,j_en,i_st,i_en)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  ith = omp_get_thread_num()
-  nth = omp_get_num_threads()
+!  ith = omp_get_thread_num()
+!  nth = omp_get_num_threads()
+  ith = 0
+  nth = 1
 
   thr_dim  = ndim / nth
   mth = ndim - thr_dim * nth
@@ -943,23 +932,17 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
 
 
 
-!$omp master
   allocate( asum(nth+nth), stat=ierr )
   asum(1) = 0.0d0
-!$omp end master
   if( ierr .ne. 0 ) then
     print*, 'Memory allocation #103 failed !!!'
     goto 990
   endif
-!$omp barrier
 
   call residual_direct( i_st, i_en, ndim, ext_ndim, lhp, ltp, a, sol, rhs, r )
 
-!$omp master
   call MPI_Allgather ( MPI_IN_PLACE, proc_dim, MPI_DOUBLE_PRECISION, &
                        r, proc_dim, MPI_DOUBLE_PRECISION, act_comm, ierr )
-!$omp end master
-!$omp barrier
 
 
 !!!! Set shadow vector !!!!
@@ -968,36 +951,26 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
   enddo
 
 
-!$omp barrier
   call dot_product( i_st, i_en, ext_ndim, rhs, rhs, asum(ith) )
   call dot_product( i_st, i_en, ext_ndim, r, r, asum(inth) )
   asum1 = 0.0
   asum2 = 0.0
-!$omp barrier
-!$omp do reduction(+:asum1, asum2) schedule(static,1)
   do i = 1, nth
     asum1 = asum1 + asum(i)
     asum2 = asum2 + asum(i+nth)
   enddo
-!$omp barrier
-!$omp master
   asum(1) = asum1
   asum(2) = asum2
   call MPI_Allreduce( MPI_IN_PLACE, asum, 2, MPI_DOUBLE_PRECISION, MPI_SUM, &
                       act_comm, ierr )
-!$omp end master
-!$omp barrier
   bnorm = sqrt( asum(1) )
   rnorm = sqrt( asum(2) )
   asum1 = 0.0
   asum2 = 0.0
-!$omp barrier
 
 
   if( irank .eq. 0 ) then
-!$omp master
     write(*,1010) 'Original relative residual norm =', rnorm/bnorm
-!$omp end master
   endif
 
   if ( rnorm .lt. ppohBEM_tor*bnorm ) then
@@ -1014,35 +987,23 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
     do j = j_st, j_en
       kp(j) = p(j)
     enddo
-  !$omp barrier
     call matvec_direct( i_st, i_en, ndim, ext_ndim, lhp, ltp, a, kp, akp )
-  !$omp barrier
-  !$omp master
     call MPI_Allgather( MPI_IN_PLACE, proc_dim, MPI_DOUBLE_PRECISION, &
                         akp, proc_dim, MPI_DOUBLE_PRECISION, act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     call dot_product( i_st, i_en, ext_ndim, shdw, r, asum(ith) )
     call dot_product( i_st, i_en, ext_ndim, shdw, akp, asum(inth) )
-  !$omp barrier
-  !$omp do reduction(+:asum1, asum2) schedule(static,1)
     do i = 1, nth
       asum1 = asum1 + asum(i)
       asum2 = asum2 + asum(i+nth)
     enddo
-  !$omp barrier
-  !$omp master
     asum(1) = asum1
     asum(2) = asum2
     call MPI_Allreduce( MPI_IN_PLACE, asum, 2, MPI_DOUBLE_PRECISION, &
                         MPI_SUM, act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     nom = asum(1)
     den = asum(2)
     asum1 = 0.0
     asum2 = 0.0
-  !$omp barrier
     alpha  = nom / den
     nomold = nom
 
@@ -1055,35 +1016,23 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
       kt(j) = t(j)
     enddo
 
-  !$omp barrier
     call matvec_direct( i_st, i_en, ndim, ext_ndim, lhp, ltp, a, kt, akt )
-  !$omp barrier
-  !$omp master
     call MPI_Allgather( MPI_IN_PLACE, proc_dim, MPI_DOUBLE_PRECISION, &
                         akt, proc_dim, MPI_DOUBLE_PRECISION, act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     call dot_product( i_st, i_en, ext_ndim, akt, t, asum(ith) )
     call dot_product( i_st, i_en, ext_ndim, akt, akt, asum(inth) )
-  !$omp barrier
-  !$omp do reduction(+:asum1, asum2) schedule(static,1)
     do i = 1, nth
       asum1 = asum1 + asum(i)
       asum2 = asum2 + asum(i+nth)
     enddo
-  !$omp barrier
-  !$omp master
     asum(1) = asum1
     asum(2) = asum2
     call MPI_Allreduce( MPI_IN_PLACE, asum, 2, MPI_DOUBLE_PRECISION, MPI_SUM, &
                         act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     nom = asum(1)
     den = asum(2)
     asum1 = 0.0
     asum2 = 0.0
-  !$omp barrier
     zeta  = nom / den
 
     do j = j_st, j_en
@@ -1093,32 +1042,22 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
       r(j) = t(j) - zeta * akt(j)
     enddo
 
-  !$omp barrier
     call dot_product( i_st, i_en, ext_ndim, shdw, r, asum(ith) )
     call dot_product( i_st, i_en, ext_ndim, r, r, asum(inth) )
-  !$omp barrier
-  !$omp do reduction(+:asum1, asum2) schedule(static,1)
     do i = 1, nth
       asum1 = asum1 + asum(i)
       asum2 = asum2 + asum(i+nth)
     enddo
-  !$omp barrier
-  !$omp master
     asum(1) = asum1
     asum(2) = asum2
     call MPI_Allreduce( MPI_IN_PLACE, asum, 2, MPI_DOUBLE_PRECISION, &
                         MPI_SUM, act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     beta = alpha * asum(1) / ( zeta * nomold )
     rnorm = sqrt( asum(2) )
     asum1 = 0.0
     asum2 = 0.0
-  !$omp barrier
     if( irank .eq. 0 ) then
-  !$omp master
       write(*,1011) 'Step', step, ' relative residual =', rnorm/bnorm
-  !$omp end master
     endif
     if( rnorm .lt. ppohBEM_tor*bnorm ) then
       exit   !!! end iteration
@@ -1129,42 +1068,29 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
 
   call residual_direct( i_st, i_en, ndim, ext_ndim, lhp, ltp, a, sol, rhs, r )
 
-!$omp master
   call MPI_Allgather ( MPI_IN_PLACE, proc_dim, MPI_DOUBLE_PRECISION, &
                        r, proc_dim, MPI_DOUBLE_PRECISION, act_comm, ierr )
-!$omp end master
-!$omp barrier
 
   call dot_product( i_st, i_en, ext_ndim, r, r, asum(ith) )
 
-!$omp barrier
-!$omp do reduction(+:asum1) schedule(static,1)
   do i = 1, nth
     asum1 = asum1 + asum(i)
   enddo
-!$omp barrier
-!$omp master
   asum(1) = asum1
   call MPI_Allreduce( MPI_IN_PLACE, asum, 1, MPI_DOUBLE_PRECISION, &
                       MPI_SUM, act_comm, ierr )
-!$omp end master
-!$omp barrier
   rnorm = sqrt( asum(1) )
-!$omp barrier
 
     if( irank .eq. 0 ) then
-!$omp master
       write(*,*) ' '
       write(*,1010) 'Relative residual norm = ', rnorm/bnorm
       write(*,*) ' '
       write(*,*) ' '
-!$omp end master
     endif
     nsteps = step
 
 990  continue
 
-!$omp end parallel
 
 1000 continue
   if(allocated(r))    deallocate(r)

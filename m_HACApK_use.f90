@@ -57,6 +57,10 @@ contains
  en_measure_time_ax=MPI_Wtime()
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000) 'lfmtx; time_AX_once  =',(en_measure_time_ax - st_measure_time_ax)/st_ctl%param(99)
 !
+#if defined(HAVE_MAGMA) & !defined(MAGMA_INIT_PER)
+ call magma_init()
+#endif
+!
  st_measure_time_ax=MPI_Wtime()
  call HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
  en_measure_time_ax=MPI_Wtime()
@@ -66,6 +70,10 @@ contains
  sol(:)=0.0d0
  lrtrn=HACApK_solve_cax(st_leafmtxp,st_bemv,st_ctl,rhs,sol,ztol)
  call MPI_Barrier( icomm, ierr )
+!
+#if defined(HAVE_MAGMA) & !defined(MAGMA_INIT_PER)
+ call magma_finalize()
+#endif
 ! 
 9999 continue
  HACApK_gensolv=lrtrn
@@ -273,6 +281,7 @@ contains
  nofc=st_bemv%nd;nffc=1;ndim=3
  nd=nofc*nffc
 
+ write(*,*) mpinr,':',nd
  if(st_ctl%param(1)>1) write(*,*) 'irank=',mpinr
  allocate(u(nd),b(nd),u_copy(nd)); 
  u(:nd)=sol(lod(:nd)); b(:nd)=rhs(lod(:nd))
@@ -305,6 +314,20 @@ contains
 #endif
 #endif
    if(param(85)==1)then
+#if defined(BICG_MAGMA_MGPU)
+! C version, all on multiple GPUs
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+       call c_HACApK_bicgstab_cax_lfmtx_mgpu(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+       write(6,2000) ' time_c_HACApK on multiple GPUs =',time_bicgstab
+       if(nstp>0)  write(6,2000) '       time_1step  =',time_bicgstab/nstp
+       write(6,*) 
+     endif
+#else
 ! SpMV on GPU
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
@@ -363,18 +386,22 @@ contains
        write(6,*) 
      endif
 
-! C version, all on multiple GPUs
+! C version, pipeline on one GPU / proc
+     u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-       call c_HACApK_bicgstab_cax_lfmtx_mgpu(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+!       call c_HACApK_bicgstab_cax_lfmtx_gpu(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+       call c_HACApK_bicgstab_cax_lfmtx_pipe(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
-       write(6,2000) ' time_c_HACApK on multiple GPUs =',time_bicgstab
+       write(6,2000) ' time_c_HACApK pipeline =',time_bicgstab
        if(nstp>0)  write(6,2000) '       time_1step  =',time_bicgstab/nstp
        write(6,*) 
      endif
+     u(:nd) = u_copy(:nd)
+#endif
 
    elseif(param(85)==2)then
      call HACApK_gcrm_lfmtx(st_leafmtxp,st_ctl,st_bemv,u,b,param,nd,nstp,lrtrn)
