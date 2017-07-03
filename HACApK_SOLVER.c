@@ -18,7 +18,7 @@ double c_hacapk_dotp_d(int nd, double *b, double *a) {
 
 
 void c_hacapk_adot_cax_lfmtx_comm2(stc_HACApK_lcontrol *st_ctl,
-                                   double *wws, double *wwr, int nd) {
+                                   double*zau, double *wws, double *wwr, int nd) {
     double tic;
     int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset); 
     int mpinr = lpmd[2]; 
@@ -33,7 +33,9 @@ void c_hacapk_adot_cax_lfmtx_comm2(stc_HACApK_lcontrol *st_ctl,
 
         int ione = 1;
         double one = 1.0;
+        lapackf77_dlaset( "F", &nd, &ione, &one, &one, zau, &nd );
         lapackf77_dlaset( "F", &nd, &ione, &one, &one, wws, &nd );
+        lapackf77_dlaset( "F", &nd, &ione, &one, &one, wwr, &nd );
         {
            int nctp = (ncsp+nrank)%nrank; // where it came from
 
@@ -84,20 +86,23 @@ void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_lcontrol *st_ctl,
 
         for (ic=1; ic<nrank; ic++) {
            MPI_Status stat;
-
            tic = MPI_Wtime();
 #if 0
            MPI_Sendrecv(isct, 2, MPI_INT, ncdp, 2*(ic-1),
                         irct, 2, MPI_INT, ncsp, 2*(ic-1), 
                         icomm, &stat);
-          
+           #if 1
+           int nctp = (ncsp-ic+nrank+1)%nrank; // where it came from
+           if (irct[0] != lnp[nctp]) printf( " irct0[%d,%d]: %d vs. %d\n",mpinr,ic,irct[0],lnp[nctp] );
+           if (irct[1] != lsp[nctp]) printf( " irct1[%d,%d]: %d vs. %d\n",mpinr,ic,irct[1],lsp[nctp] );
+           #endif
 #else // read offset/size from structure
            int nctp = (ncsp-ic+nrank+1)%nrank; // where it came from
            irct[0] = lnp[nctp];
            irct[1] = lsp[nctp];
 #endif
 
-#if 1
+#if 0
            MPI_Status stats[2];
            MPI_Request reqs[2];
            if (MPI_SUCCESS != MPI_Isend(wws, isct[0], MPI_DOUBLE, ncdp, nrank+ic, MPI_COMM_WORLD, &reqs[0])) 
@@ -177,14 +182,14 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     double eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm;
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
-    int mpinr, nrank, icomm, ierr;
+    int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
  
+    MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
-    icomm = MPI_COMM_WORLD; //lpmd[0];
     MPI_Barrier( icomm );
 
     wws = (double*)malloc((*nd) * sizeof(double));
@@ -212,8 +217,6 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     alpha = 0.0; beta = 0.0; zeta = 0.0;
     zz = c_hacapk_dotp_d(*nd, b, b ); 
     bnorm=sqrt(zz);
-    lapackf77_dlaset( "F", nd, &ione, &zero, &zero, zp, nd );
-    lapackf77_dlaset( "F", nd, &ione, &zero, &zero, zakp, nd );
     lapackf77_dlacpy( "F", nd, &ione, b, nd, zr, nd );
     //  .. SpMV ..
     tic = MPI_Wtime();
@@ -234,9 +237,13 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     for ( step=1; step<=mstep; step++ ) {
         if (zrnorm/bnorm < eps) break;
         // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
-        blasf77_daxpy( nd, &zeta, zakp, &ione, zp, &ione );
-        lapackf77_dlascl( "G", &ione, &ione, &one, &beta, nd, &ione, zp, nd, &info );
-        blasf77_daxpy( nd, &one, zr, &ione, zp, &ione );
+        if (beta == zero) {
+            lapackf77_dlacpy( "F", nd, &ione, zr, nd, zp, nd );
+        } else {
+            blasf77_daxpy( nd, &zeta, zakp, &ione, zp, &ione );
+            lapackf77_dlascl( "G", &ione, &ione, &one, &beta, nd, &ione, zp, nd, &info );
+            blasf77_daxpy( nd, &one, zr, &ione, zp, &ione );
+        }
         // zkp(:nd) = zp(:nd)
         lapackf77_dlacpy( "F", nd, &ione, zp, nd, zkp, nd );
         //  .. SpMV ..
@@ -281,7 +288,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         *nstp = step;
         en_measure_time = MPI_Wtime();
         time = en_measure_time - st_measure_time;
-        if (st_ctl->param[0] > 0 && mpinr==0) {
+        if (st_ctl->param[0] > 0 && mpinr == 0) {
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
@@ -290,9 +297,9 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     time = en_measure_time - st_measure_time;
     // delete matrix
     c_hacapk_adot_body_lfdel_batch_(st_leafmtxp);
-    if (st_ctl->param[0]>0) {
+    if (st_ctl->param[0] > 0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
-        if (mpinr==0) {
+        if (mpinr == 0) {
             printf( "       BiCG        = %.5e\n", time );
             printf( "        time_mpi   = %.5e\n", time_mpi );
             printf( "        time_spmv  = %.5e\n", time_spmv );
@@ -334,14 +341,14 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     double eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm;
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
-    int mpinr, nrank, icomm, ierr;
+    int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
  
+    MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
-    icomm = MPI_COMM_WORLD; //lpmd[0];
     MPI_Barrier( icomm );
 
     int on_gpu = 1;
@@ -390,11 +397,9 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     alpha = 0.0; beta = 0.0; zeta = 0.0;
     zz = magma_ddot(*nd, b, ione, b, ione, queue); 
     bnorm=sqrt(zz);
-    magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zp, *nd, queue );
-    magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zakp, *nd, queue );
-    magma_queue_sync( queue );
     //  .. SpMV ..
     magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zshdw, *nd, queue );
+    magma_queue_sync( queue );
     tic = MPI_Wtime();
     c_hacapk_adot_body_lfmtx_batch_queue(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy, 
                                          on_gpu, queue);
@@ -411,14 +416,18 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     if (mpinr == 0) {
         printf( "\n ** BICG with MAGMA batched on GPU **\n" );
         printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
-        printf( "HACApK_bicgstab_lfmtx_flat start\n" );
+        printf( "HACApK_bicgstab_lfmtx_gpu start\n" );
     }
     for ( step=1; step<=mstep; step++ ) {
         if (zrnorm/bnorm < eps) break;
         // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
-        magma_daxpy( *nd, zeta, zakp, ione, zp, ione, queue );
-        magmablas_dlascl( MagmaFull, ione, ione, one, beta, *nd, ione, zp, *nd, queue, &info );
-        magma_daxpy( *nd, one, zr, ione, zp, ione, queue );
+        if (beta == zero) {
+            magmablas_dlacpy( MagmaFull, *nd, ione, zr, *nd, zp, *nd, queue );
+        } else {
+            magma_daxpy( *nd, zeta, zakp, ione, zp, ione, queue );
+            magmablas_dlascl( MagmaFull, ione, ione, one, beta, *nd, ione, zp, *nd, queue, &info );
+            magma_daxpy( *nd, one, zr, ione, zp, ione, queue );
+        }
         // zkp(:nd) = zp(:nd)
         magmablas_dlacpy( MagmaFull, *nd, ione, zp, *nd, zkp, *nd, queue );
         //  .. SpMV ..
@@ -471,7 +480,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
         *nstp = step;
         en_measure_time = MPI_Wtime();
         time = en_measure_time - st_measure_time;
-        if (st_ctl->param[0] > 0 && mpinr==0) {
+        if (st_ctl->param[0] > 0 && mpinr == 0) {
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
@@ -481,9 +490,9 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     time = en_measure_time - st_measure_time;
     // delete matrix
     c_hacapk_adot_body_lfdel_batch_(st_leafmtxp);
-    if (st_ctl->param[0]>0) {
+    if (st_ctl->param[0] > 0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
-        if (mpinr==0) {
+        if (mpinr == 0) {
             printf( "       BiCG        = %.5e\n", time );
             printf( "        time_mpi   = %.5e\n", time_mpi );
             printf( "        time_copy  = %.5e\n", time_copy );
@@ -529,45 +538,53 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     double one  =  1.0;
     double mone = -1.0;
     // local arrays
-    double *zr, *zshdw, *zp, *zt, *zkp, *zakp, *zkt, *zakt;
-    double *b = NULL, *u = NULL, *wws, *wwr, *wws_cpu, *wwr_cpu;
     int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset);
     int isct[2], irct[2];
     // local variables
     double eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm;
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
-    int mpinr, nrank, icomm, ierr;
+    int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
  
+    MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
-    icomm = MPI_COMM_WORLD; //lpmd[0];
     MPI_Barrier( icomm );
 
     #define ACCUM_ON_CPU
     #if defined(ACCUM_ON_CPU)
-    int flag = 1;
-    #else
     int flag = 0;
+    #else
+    int flag = 1;
     #endif
     int on_gpu = 1, d, gpu_id = get_device_id(st_leafmtxp);
     magma_device_t cdev;
-    magma_queue_t *queue = (magma_queue_t *)malloc(gpus_per_proc * sizeof(magma_queue_t));
+    magma_queue_t *queue = (magma_queue_t *)malloc(2*gpus_per_proc * sizeof(magma_queue_t));
     for (d=0; d<gpus_per_proc; d++) {
         magma_setdevice((gpu_id+d)%procs_per_node);
         magma_getdevice( &cdev );
         magma_queue_create( cdev, &queue[d] );
+        magma_queue_create( cdev, &queue[d+gpus_per_proc] );
     }
     // main GPU
     magma_setdevice(gpu_id);
 
     // use pinned memory for CPU buffer
-    magma_dmalloc_pinned(&wws_cpu, *nd);
+    double *zau_cpu, *wws_cpu, *wwr_cpu;
+#define PINNED_BUFFER
+#ifdef PINNED_BUFFER
+    magma_dmalloc_pinned(&zau_cpu,  *nd);
+#else
+    magma_dmalloc_cpu(&zau_cpu,  *nd);
+#endif
+    magma_dmalloc_pinned(&wws_cpu,  *nd);
     magma_dmalloc_pinned(&wwr_cpu, (*nd)*gpus_per_proc);
 
+    double *zr, *zshdw, *zp, *zt, *zkp, *zakp, *zkt, *zakt;
+    double *b = NULL, *u = NULL, *wws, *wwr; 
     if (MAGMA_SUCCESS != magma_dmalloc(&u, *nd) ||
         MAGMA_SUCCESS != magma_dmalloc(&b, *nd) ||
         MAGMA_SUCCESS != magma_dmalloc(&zt, *nd) ||
@@ -582,6 +599,10 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         MAGMA_SUCCESS != magma_dmalloc(&zshdw, *nd)) {
       printf( " failed to allocate vectors (nd=%d)\n",*nd );
     }
+    #define WARMUP_MPI
+    #ifdef WARMUP_MPI
+    c_hacapk_adot_cax_lfmtx_comm2(st_ctl, zau_cpu, wws_cpu, wwr_cpu, *nd);
+    #endif
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(nd, st_leafmtxp, queue);
     //
@@ -598,23 +619,22 @@ double time_set3 = 0.0;
     magma_dsetvector_async( *nd, b_cpu, 1, b, 1, queue[0] );
     magma_dsetvector_async( *nd, u_cpu, 1, u, 1, queue[0] );
     // init
-    alpha = 0.0; beta = 0.0; zeta = 0.0;
+    alpha = zero; beta = zero; zeta = zero;
     zz = magma_ddot(*nd, b, ione, b, ione, queue[0]); 
     bnorm=sqrt(zz);
-    magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zp, *nd, queue[0] );
-    magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zakp, *nd, queue[0] );
-    magma_queue_sync( queue[0] );
     // .. SpMV ..
+    int flag_set = 1;
     magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zshdw, *nd, queue[0] );
+    magma_queue_sync( queue[0] );
     tic = MPI_Wtime();
-    c_hacapk_adot_body_lfmtx_batch_mgpu(zshdw,st_leafmtxp,st_ctl,u,wws, wws_cpu,wwr_cpu,
+    c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zshdw,st_leafmtxp,st_ctl,u,wws, zau_cpu,wwr_cpu,
                                         &time_batch,&time_set,&time_copy,
 &time_set2, &time_set3,
                                         on_gpu, queue);
     magma_queue_sync( queue[0] );
     time_spmv += (MPI_Wtime()-tic);
-    c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zshdw, wws_cpu,
-                                     st_ctl, u_cpu, wwr_cpu, isct, irct, *nd, 
+    c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zshdw, zau_cpu,
+                                     st_ctl, wws_cpu, wwr_cpu, isct, irct, *nd, 
                                      &time_copy,&time_mpi, queue[0]);
     //
     magmablas_dlacpy( MagmaFull, *nd, ione, b, *nd, zr, *nd, queue[0] );
@@ -625,34 +645,41 @@ double time_set3 = 0.0;
     if (mpinr == 0) {
         printf( "\n ** BICG with MAGMA batched on multiple GPUs (%d GPUs) **\n",gpus_per_proc );
         printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
-        printf( "HACApK_bicgstab_lfmtx_flat start\n" );
+        printf( "HACApK_bicgstab_lfmtx_mgpu start\n" );
+printf( " time_mpi=%.2e\n",time_mpi );
     }
     for ( step=1; step<=mstep; step++ ) {
         if (zrnorm/bnorm < eps) break;
         // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
-        magma_daxpy( *nd, zeta, zakp, ione, zp, ione, queue[0] );
-        magmablas_dlascl( MagmaFull, ione, ione, one, beta, *nd, ione, zp, *nd, queue[0], &info );
-        magma_daxpy( *nd, one, zr, ione, zp, ione, queue[0] );
+        if (beta == zero) {
+            magmablas_dlacpy( MagmaFull, *nd, ione, zr, *nd, zp, *nd, queue[0] );
+        } else {
+            magma_daxpy( *nd, zeta, zakp, ione, zp, ione, queue[0] );
+            magmablas_dlascl( MagmaFull, ione, ione, one, beta, *nd, ione, zp, *nd, queue[0], &info );
+            magma_daxpy( *nd, one, zr, ione, zp, ione, queue[0] );
+        }
         // zkp(:nd) = zp(:nd)
         magmablas_dlacpy( MagmaFull, *nd, ione, zp, *nd, zkp, *nd, queue[0] );
+//if (mpinr == 0) printf( "zkp: %.2e\n",magma_ddot( *nd, zkp, ione, zkp, ione, queue[0]) ); 
         //  .. SpMV ..
         magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zakp, *nd, queue[0] );
         magma_queue_sync( queue[0] );
         tic = MPI_Wtime();
-        c_hacapk_adot_body_lfmtx_batch_mgpu(zakp,st_leafmtxp,st_ctl, zkp,wws, wws_cpu,wwr_cpu,
+        c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zakp,st_leafmtxp,st_ctl, zkp,wws, zau_cpu,wwr_cpu,
                                             &time_batch,&time_set,&time_copy, 
 &time_set2, &time_set3,
                                             on_gpu, queue);
         magma_queue_sync( queue[0] );
         time_spmv += (MPI_Wtime()-tic);
-        c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakp, wws_cpu,
-                                         st_ctl, u_cpu,wwr_cpu, isct,irct,*nd, 
+        c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakp, zau_cpu,
+                                         st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue[0]);
         //
         znorm = magma_ddot( *nd, zshdw, ione, zr, ione, queue[0] ); 
         zden = magma_ddot( *nd, zshdw, ione, zakp, ione, queue[0] );
         alpha = -znorm/zden;
         znormold = znorm;
+if (mpinr == 0) printf( " alpha=%.2e znorm=%.2e, zden=%.2e, time_mpi=%.2e\n",alpha,znorm,zden,time_mpi);
         // zt(:nd) = zr(:nd) - alpha*zakp(:nd)
         magmablas_dlacpy( MagmaFull, *nd, ione, zr, *nd, zt, *nd, queue[0] );
         magma_daxpy( *nd, alpha, zakp, ione, zt, ione, queue[0] );
@@ -663,19 +690,20 @@ double time_set3 = 0.0;
         magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zakt, *nd, queue[0] );
         magma_queue_sync( queue[0] );
         tic = MPI_Wtime();
-        c_hacapk_adot_body_lfmtx_batch_mgpu(zakt,st_leafmtxp,st_ctl, zkt,wws, wws_cpu,wwr_cpu, 
+        c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zakt,st_leafmtxp,st_ctl, zkt,wws, zau_cpu,wwr_cpu, 
                                             &time_batch,&time_set,&time_copy,
 &time_set2, &time_set3,
                                             on_gpu, queue);
         magma_queue_sync( queue[0] );
         time_spmv += (MPI_Wtime()-tic);
-        c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakt,wws_cpu,
-                                         st_ctl, u_cpu,wwr_cpu, isct,irct,*nd, 
+        c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakt,zau_cpu,
+                                         st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue[0]);
         //
         znorm = magma_ddot( *nd, zakt, ione, zt, ione, queue[0] ); 
         zden = magma_ddot( *nd, zakt, ione, zakt, ione, queue[0] );
         zeta = znorm/zden;
+if (mpinr == 0) printf( " zeta=%.2e znorm=%.2e, zden=%.2e, time_mpi=%.2e\n",zeta,znorm,zden,time_mpi );
         // u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
         magma_daxpy( *nd, alpha, zkp, ione, u, ione, queue[0] );
         magma_daxpy( *nd, zeta,  zkt, ione, u, ione, queue[0] );
@@ -691,7 +719,7 @@ double time_set3 = 0.0;
         *nstp = step;
         en_measure_time = MPI_Wtime();
         time = en_measure_time - st_measure_time;
-        if (st_ctl->param[0] > 0 && mpinr==0) {
+        if (st_ctl->param[0] > 0 && mpinr == 0) {
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
@@ -701,9 +729,9 @@ double time_set3 = 0.0;
     time = en_measure_time - st_measure_time;
     // delete matrix
     c_hacapk_adot_body_lfdel_mgpu_(st_leafmtxp);
-    if (st_ctl->param[0]>0) {
+    if (st_ctl->param[0] > 0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
-        if (mpinr==0) {
+        if (mpinr == 0) {
             printf( "       BiCG        = %.5e\n", time );
             printf( "        time_mpi   = %.5e\n", time_mpi );
             printf( "        time_copy  = %.5e\n", time_copy );
@@ -716,10 +744,17 @@ printf( " > time_set3  = %.5e\n", time_set3 );
     }
 
     for (d=0; d<gpus_per_proc; d++) {
+        magma_queue_sync( queue[d] );
         magma_queue_destroy( queue[d] );
+        magma_queue_destroy( queue[d+gpus_per_proc] );
     }
     free(queue);
 
+#ifdef PINNED_BUFFER
+    magma_free_pinned(zau_cpu);
+#else
+    magma_free_cpu(zau_cpu);
+#endif
     magma_free_pinned(wws_cpu);
     magma_free_pinned(wwr_cpu);
 
@@ -737,6 +772,302 @@ printf( " > time_set3  = %.5e\n", time_set3 );
     magma_free(zkt);
     magma_free(zakt);
     magma_free(zshdw);
+}
+
+// BICG on multiple GPUs (redudant vector operation on each GPU)
+void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
+                                        double *u_cpu, double *b_cpu, double*param, int *nd, int *nstp, int *lrtrn) {
+    // local constants
+    int ione = 1;
+    double zero =  0.0;
+    double one  =  1.0;
+    double mone = -1.0;
+    // local arrays
+    int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset);
+    int isct[2], irct[2];
+    // local variables
+    double eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm;
+    double en_measure_time, st_measure_time, time;
+    int info, step, mstep;
+    int mpinr, nrank, ierr;
+    double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+ 
+    MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
+    mstep = param[82];
+    eps = param[90];
+    mpinr = lpmd[2]; 
+    nrank = lpmd[1]; 
+    MPI_Barrier( icomm );
+
+    #if defined(ACCUM_ON_CPU)
+    int flag = 0;
+    #else
+    int flag = 1;
+    #endif
+    int on_gpu = 1, d, gpu_id = get_device_id(st_leafmtxp);
+    magma_device_t cdev;
+    magma_queue_t *queue = (magma_queue_t *)malloc(2*gpus_per_proc * sizeof(magma_queue_t));
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice((gpu_id+d)%procs_per_node);
+        magma_getdevice( &cdev );
+        magma_queue_create( cdev, &queue[d] );
+        magma_queue_create( cdev, &queue[d+gpus_per_proc] );
+    }
+    // main GPU
+    magma_setdevice(gpu_id);
+
+    // use pinned memory for CPU buffer
+    double *zau_cpu, *wws_cpu, *wwr_cpu;
+    magma_dmalloc_pinned(&zau_cpu,  *nd);
+    magma_dmalloc_pinned(&wws_cpu,  *nd);
+    magma_dmalloc_pinned(&wwr_cpu, (*nd)*gpus_per_proc);
+
+
+    double **b = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **u = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **zr = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **zp = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **zt = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **zkp = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **zkt = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **zakp =(double**)malloc(gpus_per_proc * sizeof(double*));
+    double **zshdw = (double**)malloc(gpus_per_proc * sizeof(double*));
+    double **zakt = (double**)malloc(gpus_per_proc * sizeof(double*));
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice((gpu_id+d)%procs_per_node);
+        if (MAGMA_SUCCESS != magma_dmalloc(&u[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&b[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zt[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zr[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zp[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zkp[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zkt[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zakp[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zakt[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zshdw[d], *nd)) {
+          printf( " failed to allocate vectors (nd=%d)\n",*nd );
+        }
+    }
+    double *wws, *wwr;
+    if (MAGMA_SUCCESS != magma_dmalloc(&wws, *nd) ||
+        MAGMA_SUCCESS != magma_dmalloc(&wwr, *nd)) {
+      printf( " failed to allocate vectors (nd=%d)\n",*nd );
+    }
+    // copy matrix to GPU
+    c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(nd, st_leafmtxp, queue);
+    //
+    time_spmv = 0.0;
+    time_mpi = 0.0;
+    time_batch = 0.0;
+    time_set = 0.0;
+double time_set2 = 0.0;
+double time_set3 = 0.0;
+    time_copy = 0.0;
+    MPI_Barrier( icomm );
+    st_measure_time = MPI_Wtime();
+    // copy the input vector to GPU
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice((gpu_id+d)%procs_per_node);
+        magma_dsetvector_async( *nd, b_cpu, 1, b[d], 1, queue[d] );
+        magma_dsetvector_async( *nd, u_cpu, 1, u[d], 1, queue[d] );
+    }
+    // init
+    alpha = 0.0; beta = 0.0; zeta = 0.0;
+    magma_setdevice(gpu_id);
+    zz = magma_ddot(*nd, b[0], ione, b[0], ione, queue[0]); 
+    bnorm=sqrt(zz);
+    // .. SpMV ..
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice((gpu_id+d)%procs_per_node);
+        magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zshdw[d], *nd, queue[d] );
+    }
+    int flag_set = 1;
+    magma_queue_sync( queue[0] );
+    tic = MPI_Wtime();
+    c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zshdw[0],st_leafmtxp,st_ctl,u[0],wws, zau_cpu,wwr_cpu,
+                                        &time_batch,&time_set,&time_copy,
+&time_set2, &time_set3,
+                                        on_gpu, queue);
+    magma_queue_sync( queue[0] );
+    time_spmv += (MPI_Wtime()-tic);
+    c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zshdw[0], zau_cpu,
+                                     st_ctl, wws_cpu, wwr_cpu, isct, irct, *nd, 
+                                     &time_copy,&time_mpi, queue[0]);
+    //
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice((gpu_id+d)%procs_per_node);
+        magmablas_dlacpy( MagmaFull, *nd, ione, b[d], *nd, zr[d], *nd, queue[d] );
+        magma_daxpy( *nd, mone, zshdw[d], ione, zr[d], ione, queue[d] );
+        magmablas_dlacpy( MagmaFull, *nd, ione, zr[d], *nd, zshdw[d], *nd, queue[d] );
+    }
+    magma_setdevice(gpu_id);
+    zrnorm = magma_ddot(*nd, zr[0], ione, zr[0], ione, queue[0]); 
+    zrnorm = sqrt(zrnorm);
+    if (mpinr == 0) {
+        printf( "\n ** BICG with MAGMA batched on multiple GPUs (%d GPUs) **\n",gpus_per_proc );
+        printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
+        printf( "HACApK_bicgstab_lfmtx_flat start\n" );
+    }
+    for ( step=1; step<=mstep; step++ ) {
+        if (zrnorm/bnorm < eps) break;
+        // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice((gpu_id+d)%procs_per_node);
+            if (beta == zero) {
+                magmablas_dlacpy( MagmaFull, *nd, ione, zr[d], *nd, zp[d], *nd, queue[d] );
+            } else {
+                magma_daxpy( *nd, zeta, zakp[d], ione, zp[d], ione, queue[d] );
+                magmablas_dlascl( MagmaFull, ione, ione, one, beta, *nd, ione, zp[d], *nd, queue[d], &info );
+                magma_daxpy( *nd, one, zr[d], ione, zp[d], ione, queue[d] );
+            }
+        }
+        // zkp(:nd) = zp(:nd)
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice((gpu_id+d)%procs_per_node);
+            magmablas_dlacpy( MagmaFull, *nd, ione, zp[d], *nd, zkp[d], *nd, queue[d] );
+        }
+magma_setdevice(gpu_id);
+if (mpinr == 0) printf( "zkp: %.2e\n",magma_ddot( *nd, zkp[0], ione, zkp[0], ione, queue[0]) ); 
+        //  .. SpMV ..
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice((gpu_id+d)%procs_per_node);
+            magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zakp[d], *nd, queue[d] );
+        }
+        magma_setdevice(gpu_id);
+        magma_queue_sync( queue[0] );
+        tic = MPI_Wtime();
+        c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zakp[0],st_leafmtxp,st_ctl, zkp[0],wws, zau_cpu,wwr_cpu,
+                                            &time_batch,&time_set,&time_copy, 
+&time_set2, &time_set3,
+                                            on_gpu, queue);
+        magma_queue_sync( queue[0] );
+        time_spmv += (MPI_Wtime()-tic);
+        c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakp[0], zau_cpu,
+                                         st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
+                                         &time_copy,&time_mpi, queue[0]);
+        //
+        magma_setdevice(gpu_id);
+        znorm = magma_ddot( *nd, zshdw[0], ione, zr[0], ione, queue[0] ); 
+        zden = magma_ddot( *nd, zshdw[0], ione, zakp[0], ione, queue[0] );
+        alpha = -znorm/zden;
+if (mpinr == 0) printf( " alpha=%.2e znorm=%.2e, zden=%.2e\n",alpha,znorm,zden );
+        znormold = znorm;
+        // zt(:nd) = zr(:nd) - alpha*zakp(:nd)
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice((gpu_id+d)%procs_per_node);
+            magmablas_dlacpy( MagmaFull, *nd, ione, zr[d], *nd, zt[d], *nd, queue[d] );
+            magma_daxpy( *nd, alpha, zakp[d], ione, zt[d], ione, queue[d] );
+        }
+        alpha = -alpha;
+        // zkt(:nd) = zt(:nd)
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice((gpu_id+d)%procs_per_node);
+            magmablas_dlacpy( MagmaFull, *nd, ione, zt[d], *nd, zkt[d], *nd, queue[d] );
+        }
+        //  .. SpMV ..
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice((gpu_id+d)%procs_per_node);
+            magmablas_dlaset( MagmaFull, *nd, ione, zero, zero, zakt[d], *nd, queue[d] );
+        }
+        magma_setdevice(gpu_id);
+        magma_queue_sync( queue[0] );
+        tic = MPI_Wtime();
+        c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zakt[0],st_leafmtxp,st_ctl, zkt[0],wws, zau_cpu,wwr_cpu, 
+                                            &time_batch,&time_set,&time_copy,
+&time_set2, &time_set3,
+                                            on_gpu, queue);
+        magma_queue_sync( queue[0] );
+        time_spmv += (MPI_Wtime()-tic);
+        c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakt[0],zau_cpu,
+                                         st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
+                                         &time_copy,&time_mpi, queue[0]);
+        //
+        magma_setdevice(gpu_id);
+        znorm = magma_ddot( *nd, zakt[0], ione, zt[0], ione, queue[0] ); 
+        zden = magma_ddot( *nd, zakt[0], ione, zakt[0], ione, queue[0] );
+        zeta = znorm/zden;
+if (mpinr == 0) printf( " zeta=%.2e znorm=%.2e, zden=%.2e\n",zeta,znorm,zden );
+        // u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice((gpu_id+d)%procs_per_node);
+            magma_daxpy( *nd, alpha, zkp[d], ione, u[d], ione, queue[d] );
+            magma_daxpy( *nd, zeta,  zkt[d], ione, u[d], ione, queue[d] );
+        }
+        // zr(:nd) = zt(:nd) - zeta*zakt(:nd)
+        zeta = -zeta;
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice((gpu_id+d)%procs_per_node);
+            magmablas_dlacpy( MagmaFull, *nd, ione, zt[d], *nd, zr[d], *nd, queue[d] );
+            magma_daxpy( *nd, zeta, zakt[d], ione, zr[d], ione, queue[d] );
+        }
+        // beta = alpha/zeta * HACApK_dotp_d(nd,zshdw,zr)/znormold;
+        magma_setdevice(gpu_id);
+        beta = magma_ddot( *nd, zshdw[0], ione, zr[0], ione, queue[0]);
+        beta = -alpha/zeta * beta/znormold;
+        zrnorm = magma_ddot( *nd, zr[0], ione, zr[0], ione, queue[0] );
+        zrnorm = sqrt(zrnorm);
+        *nstp = step;
+        en_measure_time = MPI_Wtime();
+        time = en_measure_time - st_measure_time;
+        if (st_ctl->param[0] > 0 && mpinr == 0) {
+            printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
+        }
+    }
+    magma_dgetvector( *nd, u[0], 1, u_cpu, 1, queue[0] );
+    MPI_Barrier( icomm );
+    en_measure_time = MPI_Wtime();
+    time = en_measure_time - st_measure_time;
+    // delete matrix
+    c_hacapk_adot_body_lfdel_mgpu_(st_leafmtxp);
+    if (st_ctl->param[0]>0) {
+        //printf( " End: %d, %.2e\n",mpinr,time );
+        if (mpinr == 0) {
+            printf( "       BiCG        = %.5e\n", time );
+            printf( "        time_mpi   = %.5e\n", time_mpi );
+            printf( "        time_copy  = %.5e\n", time_copy );
+            printf( "        time_spmv  = %.5e\n", time_spmv );
+            printf( "        > time_batch = %.5e\n", time_batch );
+            printf( "        > time_set   = %.5e\n", time_set );
+printf( " > time_set2  = %.5e\n", time_set2 );
+printf( " > time_set3  = %.5e\n", time_set3 );
+        }
+    }
+
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_queue_sync( queue[d] );
+        magma_queue_destroy( queue[d] );
+        magma_queue_destroy( queue[d+gpus_per_proc] );
+
+        magma_free(u[d]);
+        magma_free(b[d]);
+
+        magma_free(zt[d]);
+        magma_free(zr[d]);
+        magma_free(zp[d]);
+        magma_free(zkp[d]);
+        magma_free(zakp[d]);
+        magma_free(zkt[d]);
+        magma_free(zakt[d]);
+        magma_free(zshdw[d]);
+    }
+    free(queue);
+    free(u);
+    free(b);
+    free(zt);
+    free(zr);
+    free(zp);
+    free(zkp);
+    free(zakp);
+    free(zkt);
+    free(zakt);
+    free(zshdw);
+
+    magma_free_pinned(zau_cpu);
+    magma_free_pinned(wws_cpu);
+    magma_free_pinned(wwr_cpu);
+
+    magma_free(wws);
+    magma_free(wwr);
 }
 
 
@@ -763,14 +1094,14 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     double eps, alpha, beta, zeta, zden, znorm, znormold, bnorm, zrnorm;
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
-    int mpinr, nrank, icomm, ierr;
+    int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
  
+    MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
-    icomm = MPI_COMM_WORLD; //lpmd[0];
     MPI_Barrier( icomm );
 
     int on_gpu = 1;
@@ -811,9 +1142,8 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     //lapackf77_dlaset( "F", nd, &ione, &zero, &zero, wwr_cpu, nd );
     //lapackf77_dlaset( "F", nd, &ione, &zero, &zero, zau_cpu, nd );
     //MPI_Barrier( icomm );
-    #define WARMUP_MPI
     #ifdef WARMUP_MPI
-    c_hacapk_adot_cax_lfmtx_comm2(st_ctl, wws_cpu, wwr_cpu, *nd);
+    c_hacapk_adot_cax_lfmtx_comm2(st_ctl, zau_cpu, wws_cpu, wwr_cpu, *nd);
     #endif
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
@@ -878,7 +1208,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     if (mpinr == 0) {
         printf( "\n ** pipelined BICG with MAGMA batched on GPU **\n" );
         printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
-        printf( "HACApK_bicgstab_lfmtx_flat start\n" );
+        printf( "HACApK_bicgstab_lfmtx_pipe start\n" );
     }
     for ( step=1; step<=mstep; step++ ) {
         if (zrnorm/bnorm < eps) break;
@@ -949,7 +1279,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         *nstp = step;
         en_measure_time = MPI_Wtime();
         time = en_measure_time - st_measure_time;
-        if (st_ctl->param[0] > 0 && mpinr==0) {
+        if (st_ctl->param[0] > 0 && mpinr == 0) {
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
         //  .. SpMV: zt = A*zw ..
@@ -970,9 +1300,9 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     time = en_measure_time - st_measure_time;
     // delete matrix
     c_hacapk_adot_body_lfdel_batch_(st_leafmtxp);
-    if (st_ctl->param[0]>0) {
+    if (st_ctl->param[0] > 0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
-        if (mpinr==0) {
+        if (mpinr == 0) {
             printf( "       BiCG        = %.5e\n", time );
             printf( "        time_mpi   = %.5e\n", time_mpi );
             printf( "        time_copy  = %.5e\n", time_copy );

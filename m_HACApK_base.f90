@@ -56,7 +56,7 @@ module m_HACApK_base
     integer*4 kt
     integer*4 nstrtl,ndl;
     integer*4 nstrtt,ndt;
-    integer*4 a1size !!!
+    integer*8 a1size !!!
     real*8,pointer :: a1(:,:)=>null(),a2(:,:)=>null()
   end type st_HACApK_leafmtx
 
@@ -220,7 +220,6 @@ module m_HACApK_base
     integer*4,pointer :: nlf_mgpu
     integer*4,pointer :: num_batch_mgpu
 #endif
-
     !integer mpi_comm
     integer mpi_rank
 #endif
@@ -282,7 +281,7 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  type(st_HACApK_calc_entry) :: st_bemv
  type(st_HACApK_lcontrol) :: st_ctl
  integer,optional :: icomma
- character*64 logfile
+ character*320 logfile
 #ifdef HAVE_PaRSEC_SUBCOMM
  integer my_rank(1)  ! MPI_Comm
  integer my_comm     ! MPI_Comm
@@ -314,7 +313,11 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  else
    icomm=MPI_COMM_WORLD; lf_umpi=0
    call MPI_Init ( ierr )
-   if( ierr .ne. 0 )  print*, 'HACApK_init; Error: MPI_Init failed !!!' 
+   if( ierr .ne. 0 ) then
+     print*, 'HACApK_init; Error: MPI_Init failed !!!' 
+   else
+     print*, 'HACApK_init; Error: MPI_Inited !!!' 
+   endif
  endif
  call MPI_Comm_size ( icomm, nrank, ierr )
  if(ierr.ne.0) then
@@ -345,10 +348,9 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
   st_ctl%lpmd(3)=0;
 #endif
 #endif
- nthr=1
 !  nthr = omp_get_num_threads()
-  nthr = 1
-  if(nthr>0) st_ctl%lpmd(20)=nthr
+ nthr = 1
+ if(nthr>0) st_ctl%lpmd(20)=nthr
  allocate(st_ctl%lod(nd),st_ctl%lthr(nthr+1),st_ctl%lnp(nrank),st_ctl%lsp(nrank),stat = ierr)
  
  call MPI_Barrier( icomm, ierr )
@@ -506,7 +508,8 @@ endfunction
   enddo
 !  write(*,1000) 'irank=',mpinr,' ndlf_s=',lpmd(11),', ndlf_e=',lpmd(12)
   st_leafmtxp%nlf=lpmd(12)-lpmd(11)+1
-  allocate(st_leafmtxp%st_lf(st_leafmtxp%nlf)); st_leafmtxp%st_lf(1:st_leafmtxp%nlf)=st_leafmtx(lpmd(11):lpmd(12))
+  allocate(st_leafmtxp%st_lf(st_leafmtxp%nlf));
+  st_leafmtxp%st_lf(1:st_leafmtxp%nlf)=st_leafmtx(lpmd(11):lpmd(12))
   lnmtx(:)=0; mem8=0; ktp=param(62)
   do ip=lpmd(11),lpmd(12)
     ltmtx=st_leafmtx(ip)%ltmtx; ndl=st_leafmtx(ip)%ndl; ndt=st_leafmtx(ip)%ndt; ns=ndl*ndt
@@ -970,14 +973,13 @@ endfunction
  real*8 ::param(:)
  integer*4 :: lodl(nd),lodt(nd),lpmd(:),lnmtx(:),lthr(0:)
  real*8, allocatable :: zab(:,:),zaa(:,:)
+ !real*8, dimension(:,:), pointer :: aa
  1000 format(5(a,i12)/)
  eps=param(71); ACA_EPS=param(72)*eps; kparam=param(63)
 ! ith = omp_get_thread_num()
 ! nthr = omp_get_num_threads()
  ith = 0
  nthr = 1
- if(nthr == 0) write(* ,*) nthr ,ith
- !$OMP barrier
  ith1 = ith+1
  nths=lthr(ith); nthe=lthr(ith1)-1
  ierr=0
@@ -1004,6 +1006,9 @@ endfunction
 !                      ' nstrtl=',nstrtl,' nstrtt=',nstrtt,' ndl=',ndl,' ndt=',ndt
      endif
      st_lf(ip)%kt=kt
+     !allocate(aa((ndt + ndl)*kt, 1),stat=ierr)
+     !st_lf(ip)%a1 => aa(1:(ndt*kt),:)
+     !st_lf(ip)%a2 => aa((ndt*kt+1):((ndt+ndl)*kt),:)
      allocate(st_lf(ip)%a1(ndt,kt),st_lf(ip)%a2(ndl,kt),stat=ierr)
      if(ierr.ne.0) then
         write(*,*) 'sub HACApK_fill_leafmtx_p; a1,a2 Memory allocation failed !'

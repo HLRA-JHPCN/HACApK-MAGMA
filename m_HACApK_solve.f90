@@ -435,7 +435,7 @@ end subroutine HACApK_bicgstab_lfmtx
 #endif
  2001 format(5(a,1pe15.8)/)
  2003 format(5(a,i,a,1pe9.2)/)
- if(st_ctl%param(1)>0)  write(6,2003) ' End: ',mpinr,' ',time
+ if(st_ctl%param(1) > 0)  write(6,2003) ' End: ',mpinr,' ',time
  call MPI_Barrier( icomm, ierr )
  en_measure_time = MPI_Wtime()
  time = en_measure_time - st_measure_time
@@ -636,23 +636,48 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
  st_leafmtxp%st_lf_stride = stpt-stpt2
 
  do ill=1,st_leafmtxp%nlf
+   if (tmpleafmtx(ill)%ltmtx == 1) then
     a1pt = loc(tmpleafmtx(ill)%a2(:,:))
     a2pt = a1pt
     a1pt = loc(tmpleafmtx(ill)%a1(:,:))
     tmpleafmtx(ill)%a1size =a2pt-a1pt
+    if (tmpleafmtx(ill)%a1size /= a2pt-a1pt) then
+      write(*,*)
+      write(*,*) 'warning :a1size',tmpleafmtx(ill)%a1size, a2pt,a1pt
+      write(*,*)
+    endif
+   endif
  enddo
     
+!!!
+ call MPI_Comm_rank ( icomm, st_leafmtxp%mpi_rank, ierr )
 !!!
  allocate(u(nd),v(nd),b(nd),wws(nd))
  do il=1,mstep
 !   >> C function <<
    u(:)=1.0; b(:)=1.0
+   call MPI_Barrier( icomm, ierr )
+   if (mpinr==0) then
+     write(*,*) 'calling c_HACApK_adot_body_lfmtx'
+   endif
    call c_HACApK_adot_body_lfmtx(u,st_leafmtxp,b,wws)
+   write(*,*) mpinr,'done c_HACApK_adot_body_lfmtx'
  enddo
 !
  do il=1,mstep
+#if defined(BICG_MAGMA_MGPU)
+ if(st_ctl%param(1)>0 .and. mpinr==0) then
+     write(6,*)
+     write(6,2000) '** skip; time_FPGA_AX_once with MAGMA for multi-GPU runs **'
+     write(6,*)
+ endif
+#else
 #ifdef HAVE_MAGMA
    v(:)=1.0; b(:)=1.0
+   call MPI_Barrier( icomm, ierr )
+   if (mpinr==0) then
+     write(*,*) 'calling c_HACApK_adot_body_lfcpy_gpu'
+   endif
    call c_HACApK_adot_body_lfcpy_gpu(nd,st_leafmtxp)
    call c_HACApK_adot_body_lfmtx_gpu(v,st_leafmtxp,b,wws)
    call c_HACApK_adot_body_lfdel_gpu(st_leafmtxp)
@@ -708,6 +733,7 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
        write(*,ErrFormat) ' error(CPU-GPU):' ,enorm_g ,' / ' ,unorm_g ,' = ',rnorm_g
        write(*,*)
    endif
+#endif
 #endif
 !
 #ifdef HAVE_PaRSEC

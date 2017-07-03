@@ -3,7 +3,7 @@ typedef struct stc_HACApK_leafmtx {
   int kt;
   int nstrtl, ndl;
   int nstrtt, ndt;
-  int a1size; //
+  long long int a1size; //
   double *a1;
   double *a2;
 } stc_HACApK_leafmtx;
@@ -135,7 +135,7 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
 
 void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp,
                                                  magma_queue_t *queue);
-void c_hacapk_adot_body_lfmtx_batch_mgpu(double *zau, 
+void c_hacapk_adot_body_lfmtx_batch_mgpu(int flag, double *zau, 
                                          stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl, 
                                          double *zu, double *zbu,
                                          double *zau_cpu, double *zu_cpu,

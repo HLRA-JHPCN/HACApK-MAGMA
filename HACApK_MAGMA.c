@@ -12,12 +12,16 @@ void  c_hacapk_adot_body_lfmtx_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, d
  int st_lf_stride = st_leafmtxp->st_lf_stride;
  
  nlf=st_leafmtxp->nlf;
+
+ int mpi_rank;
+ MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+
+//if (mpi_rank == 0) // good
  for (ip = 0; ip < nlf; ip++) {
    /**/
    stc_HACApK_leafmtx *sttmp;
    sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
    /**/
-
    ndl   =sttmp->ndl; // m: number of rows
    ndt   =sttmp->ndt; // n: number of columns
    nstrtl=sttmp->nstrtl; // i: index of first row (base-1)
@@ -245,8 +249,13 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
     // allocate queue
     magma_device_t cdev;
     magma_queue_t queue = NULL;
+    magma_setdevice( get_device_id(st_leafmtxp) );
     magma_getdevice( &cdev );
     magma_queue_create( cdev, &queue );
+    int name_len;
+    char proc_name[300];
+    MPI_Get_processor_name( proc_name, &name_len );
+    printf( " processor %d uses %d GPU on %s\n",st_leafmtxp->mpi_rank,(st_leafmtxp->mpi_rank)%procs_per_node,proc_name);
 
     // number of blocks
     nlf = st_leafmtxp->nlf; 
@@ -260,6 +269,7 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
     st_leafmtxp->mtx2_gpu = (magmaDouble_ptr*)malloc(nlf * sizeof(magmaDouble_ptr));
 
     // parse all the blocks
+    size_t tot = 0;
     for (ip = 0; ip < nlf; ip++) {
         /**/
         stc_HACApK_leafmtx *sttmp;
@@ -283,33 +293,38 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
             /**/
             kt = sttmp->kt; // rank
             // copy V
+            tot += ndt*kt;
             st_leafmtxp->mtx1_gpu[ip] = NULL;
-            int retval = magma_malloc( (void**) &(st_leafmtxp->mtx1_gpu[ip]), (ndt*kt)*sizeof(double) );
+            int retval = magma_dmalloc( &(st_leafmtxp->mtx1_gpu[ip]), ndt*kt );
             if ( MAGMA_SUCCESS != retval ) {
-                fprintf( stderr, "!!!! magma_malloc failed for mtx1_gpu[0][%d]\n", ip);
+                fprintf( stderr, "!!!! magma_dmalloc failed for mtx1_gpu[0][%d]=%dx%d\n", ip,ndt,kt);
                 exit(0);
             }
             magma_dsetmatrix( ndt, kt, sttmp->a1, ndt, st_leafmtxp->mtx1_gpu[ip], ndt, queue );
 
             // copy U
+            tot += ndl*kt;
             st_leafmtxp->mtx2_gpu[ip] = NULL;
-            retval = magma_malloc( (void**) &(st_leafmtxp->mtx2_gpu[ip]), (ndl*kt)*sizeof(double) );
+            retval = magma_dmalloc( &(st_leafmtxp->mtx2_gpu[ip]), ndl*kt );
             if ( MAGMA_SUCCESS != retval ) {
-                fprintf( stderr, "!!!! magma_malloc failed for mtx2_gpu[1][%d]\n", ip);
+                fprintf( stderr, "!!!! magma_dmalloc failed for mtx2_gpu[1][%d]\n", ip);
                 exit(0);
             }
             magma_dsetmatrix( ndl, kt, a2tmp, ndl, st_leafmtxp->mtx2_gpu[ip], ndl, queue );
         } else if (sttmp->ltmtx == 2) { // full
             st_leafmtxp->mtx1_gpu[ip] = NULL;
-            int retval = magma_malloc( (void**) &(st_leafmtxp->mtx1_gpu[ip]), (ndt*ndl)*sizeof(double) );
+            tot += ndt*ndl;
+            int retval = magma_dmalloc( &(st_leafmtxp->mtx1_gpu[ip]), ndt*ndl );
             if ( MAGMA_SUCCESS != retval ) {
-                fprintf( stderr, "!!!! magma_malloc failed for mtx1_gpu[0][%d]\n", ip);
+                fprintf( stderr, "!!!! magma_dmalloc failed for mtx1_gpu[0][%d]\n", ip);
                 exit(0);
             }
             magma_dsetmatrix( ndt, ndl, sttmp->a1, ndt, st_leafmtxp->mtx1_gpu[ip], ndt, queue );
             st_leafmtxp->mtx2_gpu[ip] = NULL;
         }
+        //printf( " %d(%d/%d): tot=%.2eGB\n",st_leafmtxp->mpi_rank,ip,nlf,(8.0*tot)/1e9 );
     }
+    printf( "%d: tot=%.2eGB\n",st_leafmtxp->mpi_rank,(8.0*tot)/1e9 );
     // let's just use global size.
     st_leafmtxp->m = st_leafmtxp->gn;
     st_leafmtxp->n = st_leafmtxp->gn;
@@ -320,9 +335,9 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
     if (st_leafmtxp->max_block > 0) {
         st_leafmtxp->zbu_gpu = (double**)malloc( num_streams * sizeof(double*) );
         for (ip = 0; ip < num_streams; ip++) {
-            int retval = magma_malloc( (void**) &st_leafmtxp->zbu_gpu[ip], (st_leafmtxp->max_block)*sizeof(double) );
+            int retval = magma_dmalloc( &st_leafmtxp->zbu_gpu[ip], st_leafmtxp->max_block );
             if ( MAGMA_SUCCESS != retval ) {
-                fprintf( stderr, "!!!! magma_malloc failed for zbu_gpu\n");
+                fprintf( stderr, "!!!! magma_dmalloc failed for zbu_gpu\n");
                 exit(0);
             }
         }
@@ -330,17 +345,17 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
     if (st_leafmtxp->m > 0) {
         st_leafmtxp->zau_gpu = (double**)malloc( num_streams * sizeof(double*) );
         for (ip = 0; ip < num_streams; ip++) {
-            int retval = magma_malloc( (void**) &st_leafmtxp->zau_gpu[ip], (st_leafmtxp->m)*sizeof(double) );
+            int retval = magma_dmalloc( &st_leafmtxp->zau_gpu[ip], st_leafmtxp->m );
             if ( MAGMA_SUCCESS != retval ) {
-                fprintf( stderr, "!!!! magma_malloc failed for zau_gpu\n");
+                fprintf( stderr, "!!!! magma_dmalloc failed for zau_gpu\n");
                 exit(0);
             }
         }
     }
     if (st_leafmtxp->n > 0) {
-        int retval = magma_malloc( (void**) &st_leafmtxp->zu_gpu, (st_leafmtxp->gn)*sizeof(double) );
+        int retval = magma_dmalloc( &st_leafmtxp->zu_gpu, st_leafmtxp->gn );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for zu_gpu\n");
+            fprintf( stderr, "!!!! magma_dmalloc failed for zu_gpu\n");
             exit(0);
         }
     }

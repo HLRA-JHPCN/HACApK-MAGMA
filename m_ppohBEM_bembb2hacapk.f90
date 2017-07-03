@@ -99,6 +99,7 @@ contains
  enddo
  
  allocate(zgmid(nofc,ndim))
+  write(*,*) 'nofc',nofc
   do il=1,nofc
     n1 = face2node(1,il)+1; n2 = face2node(2,il)+1; n3 = face2node(3,il)+1;
     zgmid(il,1) = (np(n1)%x+np(n2)%x+np(n3)%x)/3.0d0; ! center of balance

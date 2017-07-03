@@ -286,9 +286,9 @@ contains
     integer, intent(in)  :: comm
     integer, intent(out) :: ierr
 
-    !call MPI_Init ( ierr )
-    integer :: provided
-    call MPI_Init_thread ( MPI_THREAD_MULTIPLE, provided, ierr )
+    call MPI_Init ( ierr )
+    !integer :: provided
+    !call MPI_Init_thread ( MPI_THREAD_MULTIPLE, provided, ierr )
     if( ierr .ne. 0 ) then
       print*, 'Error: MPI_Init failed !!!'
     endif
@@ -417,6 +417,7 @@ contains
 
     !!!!  Read the coordinates of the nodes from input data file :
     !!!!      st_ppohBEM_np  !!!!
+      write(*,*) 'nond',ppohBEM_nond
       do i = 1, ppohBEM_nond
         read( iunit, * ) st_ppohBEM_np(i)%x, st_ppohBEM_np(i)%y, &
                          st_ppohBEM_np(i)%z
@@ -424,11 +425,13 @@ contains
 
     !!!!  Read number of faces from input data file : ppohBEM_nofc  !!!!
       read( iunit, * ) ppohBEM_nofc
+      write(*,*) 'ppohBEM_nofc',ppohBEM_nofc
 
     !!!!  Read number of nodes on each face from input data file : 
     !!!!       ppohBEM_nond_on_face  !!!!
 
       read( iunit, * ) ppohBEM_nond_on_face
+      write(*,*) 'ppohBEM_nond_on_face',ppohBEM_nond_on_face
 
     !!!!  Read number of integer parameters set on each face from input data
     !!!!    file : ppohBEM_nint_para_fc  !!!!

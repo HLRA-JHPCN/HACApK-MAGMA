@@ -195,33 +195,33 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     st_leafmtxp->zbu_gpu = NULL;
     if (st_leafmtxp->m > 0) {
         st_leafmtxp->zau_gpu = (double**)malloc( sizeof(double*) );
-        int retval = magma_malloc( (void**) &st_leafmtxp->zau_gpu[0], (st_leafmtxp->m)*sizeof(double) );
+        int retval = magma_dmalloc( &st_leafmtxp->zau_gpu[0], st_leafmtxp->m );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for zau_gpu (m=%d)\n",st_leafmtxp->m);
+            fprintf( stderr, "!!!! magma_dmalloc failed for zau_gpu (m=%d)\n",st_leafmtxp->m);
             exit(0);
         }
     }
     if (st_leafmtxp->n > 0) {
-        int retval = magma_malloc( (void**) &st_leafmtxp->zu_gpu, (st_leafmtxp->gn)*sizeof(double) );
+        int retval = magma_dmalloc( &st_leafmtxp->zu_gpu, st_leafmtxp->gn );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for zu_gpu\n");
+            fprintf( stderr, "!!!! magma_dmalloc failed for zu_gpu\n");
             exit(0);
         }
     }
     if (total_size_y > 0) {
         st_leafmtxp->zbu_gpu = (double**)malloc( sizeof(double*) );
-        int retval = magma_malloc( (void**) &st_leafmtxp->zbu_gpu[0], total_size_y*sizeof(double) );
+        int retval = magma_dmalloc( &st_leafmtxp->zbu_gpu[0], total_size_y );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for zbu_gpu\n");
+            fprintf( stderr, "!!!! magma_dmalloc failed for zbu_gpu\n");
             exit(0);
         }
         st_leafmtxp->total_size_y = total_size_y;
     }
     double *dA = NULL;
     if (total_size_a > 0) {
-        int retval = magma_malloc( (void**) &dA, total_size_a*sizeof(double) );
+        int retval = magma_dmalloc( &dA, total_size_a );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for dA(%d)\n",total_size_a);
+            fprintf( stderr, "!!!! magma_dmalloc failed for dA(%d)\n",total_size_a);
             exit(0);
         }
     }
@@ -463,18 +463,18 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     // reallocate
     if (total_size_a > 0) {
         magma_free(dA);
-        int retval = magma_malloc( (void**) &dA, total_size_a*sizeof(double) );
+        int retval = magma_dmalloc( &dA, total_size_a );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for dA(%d)\n",total_size_a);
+            fprintf( stderr, "!!!! magma_dmalloc failed for dA(%d)\n",total_size_a);
             exit(0);
         }
     }
     if (total_size_y > 0) {
         magma_free(st_leafmtxp->zbu_gpu);
         st_leafmtxp->zbu_gpu = (double**)malloc( sizeof(double*) );
-        int retval = magma_malloc( (void**) &st_leafmtxp->zbu_gpu[0], total_size_y*sizeof(double) );
+        int retval = magma_dmalloc( &st_leafmtxp->zbu_gpu[0], total_size_y );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for zbu_gpu\n");
+            fprintf( stderr, "!!!! magma_dmalloc failed for zbu_gpu\n");
             exit(0);
         }
         st_leafmtxp->total_size_y = total_size_y;
@@ -484,9 +484,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                       st_leafmtxp->zbu_gpu[0], total_size_y, queue );
     if (st_leafmtxp->m > 0) {
         magma_free(st_leafmtxp->zau_gpu);
-        int retval = magma_malloc( (void**) &st_leafmtxp->zau_gpu[0], (st_leafmtxp->m+Max_M)*sizeof(double) );
+        int retval = magma_dmalloc( &st_leafmtxp->zau_gpu[0], st_leafmtxp->m+Max_M );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for zau_gpu\n");
+            fprintf( stderr, "!!!! magma_dmalloc failed for zau_gpu\n");
             exit(0);
         }
     }
@@ -494,9 +494,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                       st_leafmtxp->zau_gpu[0], total_size_y, queue );
     if (st_leafmtxp->n > 0) {
         magma_free(st_leafmtxp->zu_gpu);
-        int retval = magma_malloc( (void**) &st_leafmtxp->zu_gpu, (st_leafmtxp->gn+Max_N)*sizeof(double) );
+        int retval = magma_dmalloc( &st_leafmtxp->zu_gpu, st_leafmtxp->gn+Max_N );
         if ( MAGMA_SUCCESS != retval ) {
-            fprintf( stderr, "!!!! magma_malloc failed for zu_gpu\n");
+            fprintf( stderr, "!!!! magma_dmalloc failed for zu_gpu\n");
             exit(0);
         }
     }
