@@ -1,0 +1,64 @@
+# -*- Makefile -*-
+
+# BICG MAGMA BATCHED on Reedbush-H
+# module load intel/17.0.4.196 openmpi-gdr/2.1.1/intel cuda pbsutils
+
+OPTFLAGS = -qopenmp -O3 -ip -xCORE-AVX2 -shared-intel -mcmodel=large
+#OPTFLAGS = -O3 -ip -xCORE-AVX2 -mcmodel=large
+CC=mpicc
+F90=mpif90
+CCFLAGS = $(OPTFLAGS)
+F90FLAGS = $(OPTFLAGS) -fpp -align array64byte
+LDFLAGS = -mkl -cxxlib $(OPTFLAGS)
+#LDFLAGS = -mkl -cxxlib -mcmodel=large
+
+LINK=$(F90)
+
+OBJS = HACApK_FPGA.o \
+       HACApK_lib.o m_ppohBEM_user_func.o m_ppohBEM_matrix_element_ij.o m_HACApK_calc_entry_ij.o \
+       m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.2.o
+
+# MAGMA
+CUDA_DIR  = $(CUDADIR)
+MAGMA_DIR = /lustre/gc26f/c26002/work/magma-2.2.0_intel17.0.4.196
+
+INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include
+
+LIBS+= -L$(CUDA_DIR)/lib64 -lcublas -lcusparse -lcudart $(MAGMA_DIR)/lib/libmagma.a
+
+CCFLAGS += -DHAVE_MAGMA 
+F90FLAGS+= -DHAVE_MAGMA
+
+CCFLAGS += -DHAVE_MAGMA_BATCH
+F90FLAGS+= -DHAVE_MAGMA_BATCH
+
+CCFLAGS += -DPROF_MAGMA_BATCH
+F90FLAGS+= -DPROF_MAGMA_BATCH
+
+#CCFLAGS += -DBICG_MAGMA
+#F90FLAGS+= -DBICG_MAGMA
+
+CCFLAGS += -DBICG_MAGMA_BATCH
+F90FLAGS+= -DBICG_MAGMA_BATCH
+
+
+#CCFLAGS += -Wall -Wremarks -Wcheck
+
+TARGET=bmb.out
+.SUFFIXES: .o .c .f90
+
+$(TARGET): $(OBJS)
+			$(LINK) -o $@ $(OBJS) $(LDFLAGS) $(LIBS)
+
+.c.o: *.c
+			$(CC) -c $(CCFLAGS) $(INCS) $<
+.cpp.o: *.c
+			$(CPP) -c $(CCFLAGS) $(INCS) $<
+.f90.o: *.f90
+			$(F90) -c $< $(F90FLAGS) $(INCS)
+clean:
+	rm -f *.o *.mod $(TARGET)
+
+rmod:
+	rm -f m_*.o *.mod
+
