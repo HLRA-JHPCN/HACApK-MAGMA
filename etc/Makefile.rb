@@ -1,11 +1,10 @@
-#OPTFLAGS = -O3 -traceback -ip -heap-arrays -qopenmp
-#OPTFLAGS = -openmp -O3
-OPTFLAGS = -qopenmp
+# -*- Makefile -*-
+# Makefile for Reedbush-H
+OPTFLAGS = -qopenmp -O3 -xCORE-AVX2
 CC=mpicc
 F90=mpif90
 CCFLAGS = $(OPTFLAGS)
-F90FLAGS = $(OPTFLAGS) -fpp
-#F90FLAGS = $(OPTFLAGS) -fpp1 -check all
+F90FLAGS = $(OPTFLAGS) -fpp -align array64byte
 LDFLAGS = -mkl -cxxlib
 
 LINK=$(F90)

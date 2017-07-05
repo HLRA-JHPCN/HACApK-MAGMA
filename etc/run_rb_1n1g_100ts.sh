@@ -6,7 +6,7 @@
 #PBS -l walltime=10:00
 
 cd ${PBS_O_WORKDIR}
-. /etc/profile.d/modules.sh
+module purge
 module load intel/17.0.2.174 openmpi-gdr/2.1.1/intel cuda/8.0.44
 ulimit -s 1000000
 export OMP_NUM_THREADS=1
