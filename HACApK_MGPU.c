@@ -651,7 +651,9 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(int flag, double *zau,
         if (d == 0) {
             magmablas_dlacpy( MagmaFull, st_leafmtxp->gn, 1, zu, st_leafmtxp->gn,
                               st_leafmtxp->zu_mgpu[d], st_leafmtxp->gn, queue[d]);
-            magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, zau, st_leafmtxp->m,
+            //magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, zau, st_leafmtxp->m,
+            //                  st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
+            magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero,
                               st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
         } else {
             if (flag == 1) {
@@ -697,10 +699,10 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(int flag, double *zau,
             magmablas_dlacpy( MagmaFull, st_leafmtxp->gn, 1, zu, st_leafmtxp->gn,
                               st_leafmtxp->zu_mgpu[d], st_leafmtxp->gn, queue[d+gpus_per_proc]);
             // output vector
-            magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, zau, st_leafmtxp->m,
-                              st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
-            //magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero,
+            //magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, zau, st_leafmtxp->m,
             //                  st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
+            magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero,
+                              st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
         } else {
             // output vector
             magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero,

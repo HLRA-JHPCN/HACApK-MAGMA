@@ -79,9 +79,13 @@ void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_l
             #ifdef PROF_MAGMA_BATCH
             tic = MPI_Wtime();
             #endif
+            // input
             magmablas_dlacpy( MagmaFull, st_leafmtxp->gn, 1, zu, st_leafmtxp->gn, 
                               st_leafmtxp->zu_gpu, st_leafmtxp->gn, queue );
-            magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, zau, st_leafmtxp->m, 
+            // output
+            //magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, zau, st_leafmtxp->m, 
+            //                  st_leafmtxp->zau_gpu[0], st_leafmtxp->m, queue );
+            magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero, 
                               st_leafmtxp->zau_gpu[0], st_leafmtxp->m, queue );
             #ifdef PROF_MAGMA_BATCH
             magma_queue_sync( queue );
