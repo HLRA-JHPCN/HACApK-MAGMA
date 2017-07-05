@@ -439,13 +439,13 @@ end subroutine HACApK_bicgstab_lfmtx
  call MPI_Barrier( icomm, ierr )
  en_measure_time = MPI_Wtime()
  time = en_measure_time - st_measure_time
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '      BiCG         =',time
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_tot   =',time_tot
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_mpi   =',time_mpi
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_spmv  =',time_spmv
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_copy  =',time_copy
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_set   =',time_set
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_batch =',time_batch
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN    BiCG         =',time
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_tot   =',time_tot
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_mpi   =',time_mpi
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_spmv  =',time_spmv
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      > time_copy  =',time_copy
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      > time_set   =',time_set
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      > time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_hyp
 
 !***HACApK_bicgstab_lfmtx_hyp
@@ -672,13 +672,41 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
  endif
 #else
 #ifdef HAVE_MAGMA
+! CPU (MKL)
+   v(:)=1.0; b(:)=1.0
+   call MPI_Barrier( icomm, ierr )
+   if (mpinr==0) then
+     write(*,*) 'calling c_HACApK_adot_body_lfcpy_cpu'
+   endif
+   call c_HACApK_adot_body_lfmtx_cpu1(v,st_leafmtxp,b,wws)
+   unorm = 0.0
+   do ii=1,st_leafmtxp%m
+       unorm = unorm + u(ii)*u(ii)
+   enddo
+   v = u - v
+   enorm = 0.0
+   do ii=1,st_leafmtxp%m
+       enorm = enorm + v(ii)*v(ii)
+   enddo
+   call MPI_Allreduce( enorm, enorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
+   call MPI_Allreduce( unorm, unorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
+   enorm_g = sqrt(enorm_g)
+   unorm_g = sqrt(unorm_g)
+   rnorm_g = enorm_g / unorm_g
+   if (st_leafmtxp%mpi_rank == 0) then
+       ErrFormat = "(A16, ES10.3, A3, ES10.3, A3, ES10.3)"
+       write(*,ErrFormat) ' error(CPU-MKL):' ,enorm_g ,' / ' ,unorm_g ,' = ',rnorm_g
+       write(*,*)
+   endif
+
+! GPU (MAGMA)
    v(:)=1.0; b(:)=1.0
    call MPI_Barrier( icomm, ierr )
    if (mpinr==0) then
      write(*,*) 'calling c_HACApK_adot_body_lfcpy_gpu'
    endif
    call c_HACApK_adot_body_lfcpy_gpu(nd,st_leafmtxp)
-   call c_HACApK_adot_body_lfmtx_gpu(v,st_leafmtxp,b,wws)
+   call c_HACApK_adot_body_lfmtx_gpu1(v,st_leafmtxp,b,wws)
    call c_HACApK_adot_body_lfdel_gpu(st_leafmtxp)
    unorm = 0.0
    do ii=1,st_leafmtxp%m
@@ -951,12 +979,12 @@ end function HACApK_adot_pmt_lfmtx_hyp
  2001 format(5(a,1pe15.8)/)
  2003 format(5(a,i,a,1pe9.2)/)
  !if(st_ctl%param(1)>0)  write(6,2003) ' End: ',mpinr,' ',time
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '      BiCG         =',time
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_mpi   =',time_mpi
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_spmv  =',time_spmv
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_copy  =',time_copy
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_set   =',time_set
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_batch =',time_batch
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT    BiCG         =',time
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      time_mpi   =',time_mpi
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      time_spmv  =',time_spmv
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      > time_copy  =',time_copy
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      > time_set   =',time_set
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      > time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_flat
 ! 
 !***HACApK_adot_cax_lfmtx_comm

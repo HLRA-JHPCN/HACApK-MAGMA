@@ -77,8 +77,74 @@ void magma_finalize_() {
 }
 
 /////////////////////////////////////////////////////
+// MatVec on CPU
+void  c_hacapk_adot_body_lfmtx_cpu1_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu) {
+    // constants
+    int ione = 1;
+    double one = 1.0;
+    double zero = 0.0;
+
+    int ip;
+    int nlf, ndl, ndt, nstrtl, nstrtt, kt;
+    int st_lf_stride = st_leafmtxp->st_lf_stride;
+
+    int il, it, ill, itt, itl;
+ 
+    // parse all the blocks
+    #ifdef PROF_MAGMA_BATCH
+    double tic = MPI_Wtime();
+    #endif
+    nlf=st_leafmtxp->nlf;
+    for (ip = 0; ip < nlf; ip++) {
+        /**/
+        stc_HACApK_leafmtx *sttmp;
+        sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+        /**/
+
+        ndl    = sttmp->ndl; // m: number of rows
+        ndt    = sttmp->ndt; // n: number of columns
+        nstrtl = sttmp->nstrtl; // i: index of first row (base-1)
+        nstrtt = sttmp->nstrtt; // j: index of first column (base-1)
+        if (sttmp->ltmtx == 1) { // compressed
+            /**/
+            double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+            /**/
+            kt=sttmp->kt; // rank
+            // zbu := V'*zu
+            dgemv_("T", &ndt, &kt, 
+                   &one, sttmp->a1, &ndt, 
+                         &zu[nstrtt-1], &ione,
+                   &zero, zbu, &ione );
+            for (il = 0; il < kt; il++) {
+                zbu[il]=0.0;
+                for ( it = 0; it < ndt; it++) { 
+                    itt=it+nstrtt-1;
+                    itl=it+il*ndt; 
+                    zbu[il] += sttmp->a1[itl]*zu[itt];
+                }
+            }
+            // zau :+= U*zbu
+            dgemv_("N", &ndl, &kt, 
+                   &one, a2tmp, &ndl, 
+                         zbu, &ione,
+                   &one, &zau[nstrtl-1], &ione );
+        } else if(sttmp->ltmtx == 2) { // full
+            dgemv_("T", &ndt, &ndl, 
+                   &one, sttmp->a1, &ndt, 
+                         &zu[nstrtt-1], &ione,
+                   &one, &zau[nstrtl-1], &ione );
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    #ifdef PROF_MAGMA_BATCH
+    if (st_leafmtxp->mpi_rank == 0) {
+        printf( " time_cpu: %.2e seconds\n\n",MPI_Wtime()-tic );
+    }
+    #endif
+}
+
 // MatVec on GPU
-void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu) {
+void  c_hacapk_adot_body_lfmtx_gpu1_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu) {
     // constants
     int ione = 1;
     double one = 1.0;
@@ -88,9 +154,6 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
     int nlf, ndl, ndt, nstrtl, nstrtt, kt;
     int st_lf_stride = st_leafmtxp->st_lf_stride;
  
-    //#define GPU
-    #define CPU
-    #if defined(GPU)
     // allocate queue
     magma_device_t cdev;
     magma_queue_t queue[num_streams];
@@ -106,7 +169,6 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
         magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero, 
                           st_leafmtxp->zau_gpu[ip], st_leafmtxp->m, queue[ip] );
     }
-    #endif
 
     // parse all the blocks
     #ifdef PROF_MAGMA_BATCH
@@ -123,83 +185,33 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
         ndt    = sttmp->ndt; // n: number of columns
         nstrtl = sttmp->nstrtl; // i: index of first row (base-1)
         nstrtt = sttmp->nstrtt; // j: index of first column (base-1)
-        #if defined(GPU)
         int stream_id = ip%num_streams;
-        #endif
         if (sttmp->ltmtx == 1) { // compressed
             /**/
             double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
             /**/
             kt=sttmp->kt; // rank
             // zbu := V'*zu
-            #if defined(GPU)
             magmablas_dgemv(MagmaTrans, ndt, kt, 
                             one,  st_leafmtxp->mtx1_gpu[ip], ndt, 
                                  &(st_leafmtxp->zu_gpu[nstrtt-1]), ione,
                             zero, st_leafmtxp->zbu_gpu[stream_id], ione,
                             queue[stream_id] );
-            #elif defined(CPU)
-            dgemv_("T", &ndt, &kt, 
-                   &one, sttmp->a1, &ndt, 
-                         &zu[nstrtt-1], &ione,
-                   &zero, zbu, &ione );
-            #else
-            for (il = 0; il < kt; il++) {
-                zbu[il]=0.0;
-                for ( it = 0; it < ndt; it++) { 
-                    itt=it+nstrtt-1;
-                    itl=it+il*ndt; 
-                    zbu[il] += sttmp->a1[itl]*zu[itt];
-                }
-            }
-            #endif
 
             // zau :+= U*zbu
-            #if defined(GPU)
             magmablas_dgemv(MagmaNoTrans, ndl, kt, 
                             one,   st_leafmtxp->mtx2_gpu[ip], ndl, 
                                    st_leafmtxp->zbu_gpu[stream_id], ione,
                             one, &(st_leafmtxp->zau_gpu[stream_id][nstrtl-1]), ione,
                             queue[stream_id] );
-            #elif defined(CPU)
-            dgemv_("N", &ndl, &kt, 
-                   &one, a2tmp, &ndl, 
-                         zbu, &ione,
-                   &one, &zau[nstrtl-1], &ione );
-            #else
-            for(il = 0; il < kt; il++) {
-                for(it = 0; it < ndl; it++){
-                    ill=it+nstrtl-1;
-                    itl=it+il*ndl; 
-                    zau[ill] += a2tmp[itl]*zbu[il];
-                }
-            }
-            #endif
         } else if(sttmp->ltmtx == 2) { // full
-            #if defined(GPU)
             magmablas_dgemv(MagmaTrans, ndt, ndl, 
                             one,   st_leafmtxp->mtx1_gpu[ip], ndt, 
                                  &(st_leafmtxp->zu_gpu[nstrtt-1]), ione,
                             one, &(st_leafmtxp->zau_gpu[stream_id][nstrtl-1]), ione,
                             queue[stream_id] );
-            #elif defined(CPU)
-            dgemv_("T", &ndt, &ndl, 
-                   &one, sttmp->a1, &ndt, 
-                         &zu[nstrtt-1], &ione,
-                   &one, &zau[nstrtl-1], &ione );
-            #else
-            for (il = 0; il < ndl; il++){
-                ill=il+nstrtl-1; 
-                for (it = 0; it < ndt; it++) {
-                    itt=it+nstrtt-1; 
-                    itl=it+il*ndt;
-                    zau[ill] += sttmp->a1[itl]*zu[itt];
-                }
-            }
-            #endif
         }
     }
-    #if defined(GPU)
     for (ip = 1; ip < num_streams; ip++) {
         magma_queue_sync( queue[ip] );
         magma_queue_destroy( queue[ip] );
@@ -218,21 +230,11 @@ void  c_hacapk_adot_body_lfmtx_gpu_(double *zau, stc_HACApK_leafmtxp *st_leafmtx
     // copy back
     magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue[0] );
     magma_queue_destroy( queue[0] );
-    #else
-    MPI_Barrier(MPI_COMM_WORLD);
-    #ifdef PROF_MAGMA_BATCH
-    if (st_leafmtxp->mpi_rank == 0) {
-        printf( " time_cpu: %.2e seconds\n\n",MPI_Wtime()-tic );
-    }
-    #endif
-    #endif
 }
 
 /////////////////////////////////////////////////////
 // copy blocks to GPU
 void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
-    #define GPU
-    #if defined(GPU)
     // local variables
     register int ip;
     int nlf, ndl, ndt, nstrtl, nstrtt, kt;
@@ -363,13 +365,11 @@ void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
         printf( " %d-by-%d matrix (# blocks=%d)\n",st_leafmtxp->m,st_leafmtxp->n,nlf );
     }
     magma_queue_destroy( queue );
-    #endif
 }
 
 /////////////////////////////////////////////////////
 // delete GPU memory
 void  c_hacapk_adot_body_lfdel_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
-    #if defined(GPU)
     int ip; 
     for(ip = 0; ip < st_leafmtxp->nlf; ip++) {
         if(st_leafmtxp->mtx1_gpu[ip] != NULL) {
@@ -407,6 +407,5 @@ void  c_hacapk_adot_body_lfdel_gpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
 #ifdef MAGMA_INIT_PER
     magma_finalize();
 #endif
-    #endif
 }
 #endif
