@@ -4,6 +4,7 @@
 #include	"omp.h"
 #include	"mpi.h"
 #include	"HACApK_MAGMA.h"
+#include        "magma_dlapack.h"
 
 // /////////////////////////////////////////////////////////////////////////
 // DGEMV using MAGMA
@@ -621,7 +622,7 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(int flag, double *zau,
                                          double *zu, double *zbu,
                                          double *zau_cpu, double *zu_cpu,
                                          double *time_batch, double *time_set, double *time_copy,
-double *time_set2, double *time_set3,
+                                         double *time_set2, double *time_set3,
                                          int on_gpu, magma_queue_t *queue) {
     // constants
     double zero = 0.0;
@@ -644,7 +645,7 @@ double *time_set2, double *time_set3,
             magma_dgetvector( st_leafmtxp->gn, zu, 1, zu_cpu,  1, queue[0] );
         }
     }
-#if 1
+#if 0
     for (d=0; d<gpus_per_proc; d++) {
         magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         if (d == 0) {
@@ -674,14 +675,34 @@ double *time_set2, double *time_set3,
                                 zu_cpu, 1, st_leafmtxp->zu_mgpu[d], 1, queue[d+gpus_per_proc] );
     }
     // GPU compute
+    #define PROF_SETGET_
+    #if defined(PROF_SETGET)
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+        magma_queue_sync( queue[d+gpus_per_proc] );
+        *time_set2 += (MPI_Wtime()-tic);
+    }
+    #endif
+    #if defined(PROF_SETGET__)
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+        magma_queue_sync( queue[d] );
+    }
+    double tic2 = MPI_Wtime();
+    #endif
     for (d=0; d<gpus_per_proc; d++) {
         magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         if (d == 0) {
+            // input vector
             magmablas_dlacpy( MagmaFull, st_leafmtxp->gn, 1, zu, st_leafmtxp->gn,
-                              st_leafmtxp->zu_mgpu[d], st_leafmtxp->gn, queue[d]);
+                              st_leafmtxp->zu_mgpu[d], st_leafmtxp->gn, queue[d+gpus_per_proc]);
+            // output vector
             magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, zau, st_leafmtxp->m,
                               st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
+            //magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero,
+            //                  st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
         } else {
+            // output vector
             magmablas_dlaset( MagmaFull, st_leafmtxp->m, 1, zero, zero,
                               st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
         }
@@ -689,12 +710,19 @@ double *time_set2, double *time_set3,
         magmablas_dlaset( MagmaFull, st_leafmtxp->total_size_y, 1, zero, zero,
                           st_leafmtxp->zbu_mgpu[d], st_leafmtxp->total_size_y, queue[d] );
     }
+    #if defined(PROF_SETGET__)
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+        magma_queue_sync( queue[d] );
+    }
+    *time_set2 += (MPI_Wtime()-tic2);
+    #endif
     // CPU compute
     for (d=0; d<gpus_per_proc; d++) {
         ip_d[d] = 0;
         num_batch[d] = 0;
     }
-    // Synch data copy
+    // Synch input
     for (d=1; d<gpus_per_proc; d++) {
         magma_queue_sync( queue[d+gpus_per_proc] );
     }
@@ -704,13 +732,15 @@ double *time_set2, double *time_set3,
         magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         magma_queue_sync( queue[d] );
     }
-*time_set2 += (MPI_Wtime()-tic);
+    #if defined(PROF_SETGET_)
+    *time_set2 += (MPI_Wtime()-tic);
+    #endif
     *time_set += (MPI_Wtime()-tic);
     tic = MPI_Wtime();
     #endif
     fflush(stdout);
 
-    // parse all the blocks
+    // !! Start Matrix-vector Multiply !! 
     for (ip = 0; ip < max(st_leafmtxp->num_batch, nlf) || num_saved > 0;) {
         /**/
         int ip_start = ip;
@@ -731,6 +761,7 @@ double *time_set2, double *time_set3,
         }
         count ++;
     }
+    // !! Done Matrix-vector Multiply !! 
     free(num_batch);
     free(ip_d);
     // stop timer
@@ -762,7 +793,14 @@ double *time_set2, double *time_set3,
         int ione = 1;
         double one = 1.0;
         magma_setdevice( get_device_id(st_leafmtxp) );
-        dlaset_( "F", &(st_leafmtxp->gn), &ione, &zero, &zero, zau_cpu, &(st_leafmtxp->gn) );
+        #if defined(PROF_SETGET)
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+            magma_queue_sync( queue[d] );
+        }
+        double tic2 = MPI_Wtime();
+        #endif
+        lapackf77_dlaset( "F", &(st_leafmtxp->gn), &ione, &zero, &zero, zau_cpu, &(st_leafmtxp->gn) );
         magma_dgetvector_async( mloc, &(st_leafmtxp->zau_mgpu[0][offset]), 1, 
                                       &(zau_cpu[offset]), 1, queue[0] );
         for (d=1; d<gpus_per_proc; d++) {
@@ -775,11 +813,19 @@ double *time_set2, double *time_set3,
         for (d=1; d<gpus_per_proc; d++) {
             magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
             magma_queue_sync( queue[d] );
-            daxpy_( &mloc, &one, &(zu_cpu[(d-1)*mloc]), &ione, &(zau_cpu[offset]), &ione );
+            blasf77_daxpy( &mloc, &one, &(zu_cpu[(d-1)*mloc]), &ione, &(zau_cpu[offset]), &ione );
         }
-        magma_setdevice( get_device_id(st_leafmtxp) );
-        magma_dsetvector_async( mloc, &(zau_cpu[offset]), 1, 
-                                &(zau[offset]), 1, queue[0] );
+        // no need to copy to GPU0 since it is done after MPI
+        //magma_setdevice( get_device_id(st_leafmtxp) );
+        //magma_dsetvector_async( mloc, &(zau_cpu[offset]), 1, 
+        //                        &(zau[offset]), 1, queue[0] );
+        #if defined(PROF_SETGET)
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+            magma_queue_sync( queue[d] );
+        }
+        *time_set3 += MPI_Wtime()-tic2;
+        #endif
     } else 
     #endif
     {
@@ -798,6 +844,7 @@ double *time_set2, double *time_set3,
                 magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
                 magma_queue_sync( queue[d] );
 
+                // accumulate on GPU0
                 magma_setdevice( get_device_id(st_leafmtxp) );
                 magma_dsetvector_async( mloc, &(zu_cpu[(d-1)*mloc]), 1, 
                                               &(st_leafmtxp->zau_mgpu[0][offset]), 1, queue[0] );
@@ -806,17 +853,19 @@ double *time_set2, double *time_set3,
             }
         }
     }
-    // set back to main GPU
     #ifdef PROF_MAGMA_BATCH
     for (d=0; d<gpus_per_proc; d++) {
         magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         magma_queue_sync( queue[d] );
     }
     *time_set += MPI_Wtime()-tic;
-*time_set3 += MPI_Wtime()-tic;
+    #if defined(PROF_SETGET_)
+    *time_set3 += MPI_Wtime()-tic;
     #endif
-    magma_setdevice( get_device_id(st_leafmtxp) );
+    #endif
 
+    // set back to main GPU
+    magma_setdevice( get_device_id(st_leafmtxp) );
     //#define PROF_MAGMA_BATCH_COUNT
     #ifdef PROF_MAGMA_BATCH_COUNT
     if (st_leafmtxp->mpi_rank == 0) {

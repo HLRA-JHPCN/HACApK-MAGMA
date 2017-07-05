@@ -435,7 +435,7 @@ end subroutine HACApK_bicgstab_lfmtx
 #endif
  2001 format(5(a,1pe15.8)/)
  2003 format(5(a,i,a,1pe9.2)/)
- if(st_ctl%param(1) > 0)  write(6,2003) ' End: ',mpinr,' ',time
+ !if(st_ctl%param(1) > 0)  write(6,2003) ' End: ',mpinr,' ',time
  call MPI_Barrier( icomm, ierr )
  en_measure_time = MPI_Wtime()
  time = en_measure_time - st_measure_time
@@ -661,7 +661,6 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
      write(*,*) 'calling c_HACApK_adot_body_lfmtx'
    endif
    call c_HACApK_adot_body_lfmtx(u,st_leafmtxp,b,wws)
-   write(*,*) mpinr,'done c_HACApK_adot_body_lfmtx'
  enddo
 !
  do il=1,mstep
@@ -951,7 +950,7 @@ end function HACApK_adot_pmt_lfmtx_hyp
  call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
  2001 format(5(a,1pe15.8)/)
  2003 format(5(a,i,a,1pe9.2)/)
- if(st_ctl%param(1)>0)  write(6,2003) ' End: ',mpinr,' ',time
+ !if(st_ctl%param(1)>0)  write(6,2003) ' End: ',mpinr,' ',time
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '      BiCG         =',time
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_mpi   =',time_mpi
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        time_spmv  =',time_spmv
