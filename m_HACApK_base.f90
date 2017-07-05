@@ -56,7 +56,7 @@ module m_HACApK_base
     integer*4 kt
     integer*4 nstrtl,ndl;
     integer*4 nstrtt,ndt;
-    integer*4 a1size !!!
+    integer*8 a1size !!!
     real*8,pointer :: a1(:,:)=>null(),a2(:,:)=>null()
   end type st_HACApK_leafmtx
 
@@ -170,6 +170,56 @@ module m_HACApK_base
     integer*4,pointer :: h_lda_streamed
 #endif
 !
+!   multi-GPU support
+#if defined(ISO_C_BINDING)
+    type(c_ptr) :: d_A_mgpu
+    type(c_ptr) :: d_X_mgpu
+    type(c_ptr) :: d_Y_mgpu
+    type(c_ptr) :: d_M_mgpu
+    type(c_ptr) :: d_N_mgpu
+    type(c_ptr) :: d_lda_mgpu
+    type(c_ptr) :: d_inc_mgpu
+    type(c_ptr) :: zu_mgpu
+    type(c_ptr) :: zau_mgpu
+    type(c_ptr) :: zbu_mgpu
+    type(c_ptr) :: h_A_mgpu
+    type(c_ptr) :: h_X_mgpu
+    type(c_ptr) :: h_Y_mgpu
+    type(c_ptr) :: h_type_mgpu
+    type(c_ptr) :: h_I_mgpu
+    type(c_ptr) :: h_J_mgpu
+    type(c_ptr) :: h_M_mgpu
+    type(c_ptr) :: h_N_mgpu
+    type(c_ptr) :: h_lda_mgpu
+    type(c_ptr) :: max_M_mgpu
+    type(c_ptr) :: max_N_mgpu
+    type(c_ptr) :: nlf_mgpu
+    type(c_ptr) :: num_batch_mgpu
+#else
+    real*8,   pointer :: d_A_mgpu
+    real*8,   pointer :: d_X_mgpu
+    real*8,   pointer :: d_Y_mgpu
+    integer*4,pointer :: d_M_mgpu
+    integer*4,pointer :: d_N_mgpu
+    integer*4,pointer :: d_lda_mgpu
+    integer*4,pointer :: d_inc_mgpu
+    real*8,   pointer :: zu_mgpu
+    real*8,   pointer :: zau_mgpu
+    real*8,   pointer :: zbu_mgpu
+    real*8,   pointer :: h_A_mgpu
+    real*8,   pointer :: h_X_mgpu
+    real*8,   pointer :: h_Y_mgpu
+    integer*4,pointer :: h_type_mgpu
+    integer*4,pointer :: h_I_mgpu
+    integer*4,pointer :: h_J_mgpu
+    integer*4,pointer :: h_M_mgpu
+    integer*4,pointer :: h_N_mgpu
+    integer*4,pointer :: h_lda_mgpu
+    integer*4,pointer :: max_M_mgpu
+    integer*4,pointer :: max_N_mgpu
+    integer*4,pointer :: nlf_mgpu
+    integer*4,pointer :: num_batch_mgpu
+#endif
     !integer mpi_comm
     integer mpi_rank
 #endif
@@ -231,7 +281,7 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  type(st_HACApK_calc_entry) :: st_bemv
  type(st_HACApK_lcontrol) :: st_ctl
  integer,optional :: icomma
- character*32 logfile
+ character*320 logfile
 #ifdef HAVE_PaRSEC_SUBCOMM
  integer my_rank(1)  ! MPI_Comm
  integer my_comm     ! MPI_Comm
@@ -263,7 +313,11 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  else
    icomm=MPI_COMM_WORLD; lf_umpi=0
    call MPI_Init ( ierr )
-   if( ierr .ne. 0 )  print*, 'HACApK_init; Error: MPI_Init failed !!!' 
+   if( ierr .ne. 0 ) then
+     print*, 'HACApK_init; Error: MPI_Init failed !!!' 
+   else
+     print*, 'HACApK_init; Error: MPI_Inited !!!' 
+   endif
  endif
  call MPI_Comm_size ( icomm, nrank, ierr )
  if(ierr.ne.0) then
@@ -294,11 +348,9 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
   st_ctl%lpmd(3)=0;
 #endif
 #endif
- nthr=1
-!$omp parallel
-  nthr = omp_get_num_threads()
-  if(nthr>0) st_ctl%lpmd(20)=nthr
-!$omp end parallel
+!  nthr = omp_get_num_threads()
+ nthr = 1
+ if(nthr>0) st_ctl%lpmd(20)=nthr
  allocate(st_ctl%lod(nd),st_ctl%lthr(nthr+1),st_ctl%lnp(nrank),st_ctl%lsp(nrank),stat = ierr)
  
  call MPI_Barrier( icomm, ierr )
@@ -456,7 +508,8 @@ endfunction
   enddo
 !  write(*,1000) 'irank=',mpinr,' ndlf_s=',lpmd(11),', ndlf_e=',lpmd(12)
   st_leafmtxp%nlf=lpmd(12)-lpmd(11)+1
-  allocate(st_leafmtxp%st_lf(st_leafmtxp%nlf)); st_leafmtxp%st_lf(1:st_leafmtxp%nlf)=st_leafmtx(lpmd(11):lpmd(12))
+  allocate(st_leafmtxp%st_lf(st_leafmtxp%nlf));
+  st_leafmtxp%st_lf(1:st_leafmtxp%nlf)=st_leafmtx(lpmd(11):lpmd(12))
   lnmtx(:)=0; mem8=0; ktp=param(62)
   do ip=lpmd(11),lpmd(12)
     ltmtx=st_leafmtx(ip)%ltmtx; ndl=st_leafmtx(ip)%ndl; ndt=st_leafmtx(ip)%ndt; ns=ndl*ndt
@@ -675,13 +728,11 @@ endfunction
    lcol_msk(jst)=1
    ist=istn; nrow_done=nrow_done+1; ncol_done=ncol_done+1
    if(abs(row_maxval)<ACA_EPS .and. abs(col_maxval)<ACA_EPS .and. k>=param(64)) then
-!$omp critical
      print *, 'ACA_EPS=',ACA_EPS
      print *, 'abs(row_maxval)=',abs(row_maxval)
      print *, 'abs(col_maxval)=',abs(col_maxval)
      print *, 'stop HACApK_aca 3';
 !!!     stop
-!$omp end critical
      goto 9999
    endif
    zeps=HACApK_unrm_d(ndl,pcol)*HACApK_unrm_d(ndt,prow)
@@ -709,14 +760,12 @@ endfunction
  HACApK_aca=k
 ! print*,'HACApK_aca=',aca
   if(zeps>eps .and. k<krank)then
-!$omp critical
     print *,'k=',k
     print *,'zeps=',zeps
     print *,'eps=',eps
     write(6,1000) 'nstrtl=',nstrtl,' nstrtt=',nstrtt,' ndl=',ndl,' ndt=',ndt
     print*,'znrm=',znrm
     stop
-!$omp end critical
   endif
 ! stop
  endfunction
@@ -880,9 +929,7 @@ endfunction
         elseif(param(61)==2 .or. param(61)==3)then
           apxnorm =znrm
         else
-!$omp critical
           print*,'ERROR!:: invalid param(61)=',param(61)
-!$omp end critical
           stop
         endif
       else
@@ -893,10 +940,8 @@ endfunction
       endif
     endif
   if(.false.)then
-!$omp critical
     print*,'pcol'; print*,pcol
     print*,'prow'; print*,prow
-!$omp end critical
   endif
     if(lstop_aca==1 .and. k>=param(64)) exit
     k=k+1
@@ -906,14 +951,12 @@ endfunction
 !  endif
   
   if(k<param(64))then
-!$omp critical
     print*, 'colnorm=',colnorm,' rownorm=',rownorm,'ACA_EPS=',ACA_EPS
     print*, 'col_maxval=',col_maxval,' row_maxval=',row_maxval
     print*, 'ntries_row=',ntries_row,' ntries_col=',ntries_col,' ntries=',ntries
     print*, 'k=',k
 !    k=k-1; if(k<1) stop
 !    stop
-!$omp end critical
   endif
   deallocate(lrow_msk,lcol_msk,pa_ref,pb_ref)
   HACApK_acaplus=k
@@ -930,16 +973,13 @@ endfunction
  real*8 ::param(:)
  integer*4 :: lodl(nd),lodt(nd),lpmd(:),lnmtx(:),lthr(0:)
  real*8, allocatable :: zab(:,:),zaa(:,:)
+ !real*8, dimension(:,:), pointer :: aa
  1000 format(5(a,i12)/)
  eps=param(71); ACA_EPS=param(72)*eps; kparam=param(63)
-!$OMP parallel default(none) &
-!$OMP          shared(st_lf,lodl,st_bemv,znrmmat,lodt,lthr,param) &
-!$OMP          private(zab,zaa,kt,ith,ith1,nths,nthr,nthe,ltmtx,ierr,ndl,ndt,ns,nstrtl,nstrtt,ip,il,it,ill,itt) &
-!$OMP          firstprivate(eps, ACA_EPS, kparam)
- ith = omp_get_thread_num()
- nthr = omp_get_num_threads()
- if(nthr == 0) write(* ,*) nthr ,ith
- !$OMP barrier
+! ith = omp_get_thread_num()
+! nthr = omp_get_num_threads()
+ ith = 0
+ nthr = 1
  ith1 = ith+1
  nths=lthr(ith); nthe=lthr(ith1)-1
  ierr=0
@@ -949,10 +989,8 @@ endfunction
    if(ltmtx==1)then
      allocate(zab(ndt,kparam),zaa(ndl,kparam),stat=ierr)
      if(ierr.ne.0) then
-!$omp critical
         write(*,*) 'sub HACApK_fill_leafmtx_p; zab,zaa Memory allocation failed !'
         write(*,1000) 'ip=ip',ip,' ierr=',ierr
-!$omp end critical
         stop 10
      endif
      if(param(60)==1)then
@@ -964,18 +1002,17 @@ endfunction
        stop
      endif
      if(kt>kparam-1) then
-!!!$omp critical
 !        write(*,1000) 'WARNING: Insufficient k: kt=',kt,', kparam=',kparam, &
 !                      ' nstrtl=',nstrtl,' nstrtt=',nstrtt,' ndl=',ndl,' ndt=',ndt
-!!!$omp end critical
      endif
      st_lf(ip)%kt=kt
+     !allocate(aa((ndt + ndl)*kt, 1),stat=ierr)
+     !st_lf(ip)%a1 => aa(1:(ndt*kt),:)
+     !st_lf(ip)%a2 => aa((ndt*kt+1):((ndt+ndl)*kt),:)
      allocate(st_lf(ip)%a1(ndt,kt),st_lf(ip)%a2(ndl,kt),stat=ierr)
      if(ierr.ne.0) then
-!$omp critical
         write(*,*) 'sub HACApK_fill_leafmtx_p; a1,a2 Memory allocation failed !'
         write(*,*) 'ip=ip',ip,' ierr=',ierr
-!$omp end critical
         stop 20
      endif
      st_lf(ip)%a1(1:ndt,1:kt)=zab(1:ndt,1:kt)
@@ -984,10 +1021,8 @@ endfunction
    elseif(ltmtx==2)then
      allocate(st_lf(ip)%a1(ndt,ndl),stat=ierr)
      if(ierr.ne.0) then
-!$omp critical
         write(*,*) 'sub HACApK_fill_leafmtx_p; a2 Memory allocation failed !'
         write(*,*) 'ip=ip',ip,' ierr=',ierr
-!$omp end critical
         stop 30
      endif
      do il=1,ndl; ill=il+nstrtl-1
@@ -996,12 +1031,9 @@ endfunction
        enddo
      enddo
    else
-!$omp critical
       write(*,1000) 'HACApK_fill_leafmtx_hyp; ip=',ip,' ltmtx=',ltmtx
-!$omp end critical
    endif
  enddo
-!$omp end parallel
  do ip=1,nlf
    ndl=st_lf(ip)%ndl; nstrtl=st_lf(ip)%nstrtl
    if(nstrtl<lnps) lnps=nstrtl
