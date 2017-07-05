@@ -209,13 +209,13 @@ void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_l
             #if defined(ACCUME_ON_CPU)
              magma_free_pinned(zau_batch);
             #else
-             #ifdef PROF_MAGMA_BATCH
-             tic = MPI_Wtime();
-             #endif
-             magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue );
-             #ifdef PROF_MAGMA_BATCH
-             *time_copy += MPI_Wtime()-tic;
-             #endif
+            #ifdef PROF_MAGMA_BATCH
+            tic = MPI_Wtime();
+            #endif
+            magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue );
+            #ifdef PROF_MAGMA_BATCH
+            *time_copy += MPI_Wtime()-tic;
+            #endif
             #endif
         }
     }

@@ -116,8 +116,8 @@ CCFLAGS += -mkl=sequential
 F90FLAGS+= -mkl=sequential
 
 # runs only MGPU version
-#CCFLAGS += -DBICG_MAGMA_MGPU
-#F90FLAGS+= -DBICG_MAGMA_MGPU
+CCFLAGS += -DBICG_MAGMA_MGPU
+F90FLAGS+= -DBICG_MAGMA_MGPU
 
 OPTFLAGS += -O3
 #CCFLAGS += -g
