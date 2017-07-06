@@ -46,7 +46,7 @@ program ppohBEM_bem_bb_dense_mpi
   use m_ppohBEM_bembb2hacapk
   implicit none
   include 'mpif.h'
-  integer   irank, nrank
+  integer   irank, grank, nrank
   integer   comm, ierr
   integer   iunit
 
@@ -93,21 +93,46 @@ program ppohBEM_bem_bb_dense_mpi
   type(st_HACApK_lcontrol) :: st_ctl
   logical ldense
 
+#ifdef USE_SUBCOMM
+ integer my_rank(1)  ! MPI_Comm
+ integer my_comm     ! MPI_Comm
+ integer world_group ! MPI_Group
+ integer my_group    ! MPI_Group
+#endif
+
   ldense=.false.
 !  ldense=.true.
 
-  comm = MPI_COMM_WORLD; ierr = 0
+! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! !
+! let me initialize MPI so that we can create sub-communicator !
+  ierr = 0
+  call MPI_Init ( ierr )
+  !integer :: provided
+  !call MPI_Init_thread ( MPI_THREAD_MULTIPLE, provided, ierr )
+  if( ierr .ne. 0 ) then
+    print*, 'Error: MPI_Init failed !!!'
+  endif
+! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! !
 
-  call Initialization_MPI( comm, nrank, irank, ierr )
-
+  call MPI_Comm_rank ( MPI_COMM_WORLD, grank, ierr )
+#ifdef USE_SUBCOMM
+  my_rank(1) = grank
+  call MPI_Comm_group(MPI_COMM_WORLD, world_group, ierr);
+  call MPI_Group_incl(world_group, 1, my_rank, my_group, ierr);
+  call MPI_Comm_create(MPI_COMM_WORLD, my_group, comm, ierr);
+  call MPI_Group_free(world_group, ierr);
+  call MPI_Group_free(my_group, ierr);
+#else
+  comm = MPI_COMM_WORLD;
+#endif
+  call Initialization_MPI( comm, nrank, irank, grank, ierr )
   if( ierr .ne. 0 ) then
     print*, 'Error: MPI_Init failed'
     goto 1000
   endif
 
-
   call Read_bem_bb_config( ppohBEM_number_element_dof, ppohBEM_linear_solver, &
-                           ppohBEM_tor, ppohBEM_max_steps, irank, comm, ierr )
+                           ppohBEM_tor, ppohBEM_max_steps, irank, grank, comm, ierr )
 
   if( ierr .ne. 0 ) then
     print*, 'Error: in reading bem_bb_config.txt'
@@ -140,7 +165,7 @@ program ppohBEM_bem_bb_dense_mpi
                         ppohBEM_nint_para_fc, ppohBEM_ndble_para_fc, &
                         st_ppohBEM_np, ppohBEM_face2node, &
                         ppohBEM_int_para_fc, ppohBEM_dble_para_fc, iunit, &
-                        irank, comm, ierr )
+                        irank, grank, comm, ierr )
 
   call MPI_Barrier( comm, ierr )
   if(ierr.ne.0) then
@@ -157,7 +182,7 @@ program ppohBEM_bem_bb_dense_mpi
                            st_ppohBEM_np, ppohBEM_face2node, &
                            ppohBEM_int_para_fc, ppohBEM_dble_para_fc, &
                            ndim, ppohBEM_a, ppohBEM_rhs, ppohBEM_sol, &
-                           ext_ndim, lhp, ltp, proc_dim, irank, nrank, &
+                           ext_ndim, lhp, ltp, proc_dim, grank, irank, nrank, &
                            act_nrank,ldense, ierr )
 
 
@@ -280,18 +305,12 @@ contains
   !!!!!!!!!!!!!!!!!!!!!!!!!!    Initialization_MPI    !!!!!!!!!!!!!!!!!!!!!!!!!
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !***Initialization_MPI
-  subroutine Initialization_MPI( comm, nrank, irank, ierr )
+  subroutine Initialization_MPI( comm, nrank, irank, grank, ierr )
     integer, intent(out) :: irank
+    integer, intent(in)  :: grank
     integer, intent(out) :: nrank
     integer, intent(in)  :: comm
     integer, intent(out) :: ierr
-
-    call MPI_Init ( ierr )
-    !integer :: provided
-    !call MPI_Init_thread ( MPI_THREAD_MULTIPLE, provided, ierr )
-    if( ierr .ne. 0 ) then
-      print*, 'Error: MPI_Init failed !!!'
-    endif
 
     call MPI_Comm_size ( comm, nrank, ierr )
     if( ierr .ne. 0 ) then
@@ -303,7 +322,7 @@ contains
       print*, 'Error: MPI_Comm_rank failed !!!'
     endif
 
-    if (irank.eq.0) then
+    if (grank.eq.0) then
       print*, 'Number of processes ', nrank
     endif
 
@@ -321,13 +340,14 @@ contains
 !***Read_bem_bb_config
   subroutine Read_bem_bb_config( ppohBEM_number_element_dof, &
                                  ppohBEM_linear_solver, ppohBEM_tor, &
-                                 ppohBEM_max_steps, irank, comm, ierr )
+                                 ppohBEM_max_steps, irank, grank, comm, ierr )
 
     integer,   intent(out) :: ppohBEM_number_element_dof
     character, intent(out) :: ppohBEM_linear_solver*16
     real*8,    intent(out) :: ppohBEM_tor
     integer,   intent(out) :: ppohBEM_max_steps
     integer,   intent(in)  :: irank
+    integer,   intent(in)  :: grank
     integer,   intent(in)  :: comm
     integer,   intent(out) :: ierr
 
@@ -338,7 +358,9 @@ contains
       read( 11, * ) ppohBEM_tor
       read( 11, * ) ppohBEM_max_steps
       close( 11 )
+    endif
 
+    if( grank .eq. 0 ) then
       write(*,*) "Number of unknowns set on each face element = ", &
                   ppohBEM_number_element_dof
       write(*,*) "Selected linear solver = ", ppohBEM_linear_solver
@@ -365,7 +387,7 @@ contains
                               ppohBEM_ndble_para_fc, &
                               st_ppohBEM_np, ppohBEM_face2node, &
                               ppohBEM_int_para_fc, ppohBEM_dble_para_fc, &
-                              iunit, irank, comm, ierr )
+                              iunit, irank, grank, comm, ierr )
 
     character, intent(in) :: filename*256
     integer,   intent(in)  :: ppohBEM_number_element_dof
@@ -387,6 +409,7 @@ contains
 
     integer, intent(in)  :: iunit
     integer, intent(in)  :: irank
+    integer, intent(in)  :: grank
     integer, intent(in)  :: comm
     integer, intent(out) :: ierr
 
@@ -417,7 +440,7 @@ contains
 
     !!!!  Read the coordinates of the nodes from input data file :
     !!!!      st_ppohBEM_np  !!!!
-      write(*,*) 'nond',ppohBEM_nond
+      if (grank == 0) write(*,*) 'nond',ppohBEM_nond
       do i = 1, ppohBEM_nond
         read( iunit, * ) st_ppohBEM_np(i)%x, st_ppohBEM_np(i)%y, &
                          st_ppohBEM_np(i)%z
@@ -425,13 +448,13 @@ contains
 
     !!!!  Read number of faces from input data file : ppohBEM_nofc  !!!!
       read( iunit, * ) ppohBEM_nofc
-      write(*,*) 'ppohBEM_nofc',ppohBEM_nofc
+      if (grank == 0) write(*,*) 'ppohBEM_nofc',ppohBEM_nofc
 
     !!!!  Read number of nodes on each face from input data file : 
     !!!!       ppohBEM_nond_on_face  !!!!
 
       read( iunit, * ) ppohBEM_nond_on_face
-      write(*,*) 'ppohBEM_nond_on_face',ppohBEM_nond_on_face
+      if (grank == 0) write(*,*) 'ppohBEM_nond_on_face',ppohBEM_nond_on_face
 
     !!!!  Read number of integer parameters set on each face from input data
     !!!!    file : ppohBEM_nint_para_fc  !!!!
@@ -602,7 +625,7 @@ contains
                                  st_ppohBEM_np, ppohBEM_face2node, &
                                  ppohBEM_int_para_fc, ppohBEM_dble_para_fc, &
                                  ndim, ppohBEM_a, ppohBEM_rhs, ppohBEM_sol, &
-                                 ext_ndim, lhp, ltp, proc_dim, irank, nrank, &
+                                 ext_ndim, lhp, ltp, proc_dim, grank, irank, nrank, &
                                  act_nrank,ldense, ierr )
   use m_ppohBEM_bembb2hacapk
 
@@ -628,6 +651,7 @@ contains
     integer, intent(out) :: lhp, ltp
     integer, intent(out) :: proc_dim
     integer, intent(in)  :: irank
+    integer, intent(in)  :: grank
     integer, intent(in)  :: nrank
     integer, intent(out) :: act_nrank
     integer, intent(out) :: ierr
@@ -669,7 +693,7 @@ contains
     ith = 0
     nth = 1
 
-    if ( ith.eq.0 .and. irank.eq.0 ) then
+    if ( ith.eq.0 .and. grank.eq.0 ) then
       print*, 'Number of total threads, Thread number ', nth, ith
       print*, 'ext_ndim = ', ext_ndim, ', ndim = ', ndim
     endif

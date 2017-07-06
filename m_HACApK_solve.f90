@@ -465,7 +465,7 @@ end subroutine HACApK_bicgstab_cax_lfmtx_hyp
  mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1)
    call MPI_Barrier( icomm, ierr )
    st_measure_time=MPI_Wtime()
- if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_bicgstab_lfmtx_hyp start'
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) print*,'HACApK_bicgstab_lfmtx_hyp start'
  mstep=param(83)
  eps=param(91)
  allocate(wws(maxval(lnp(0:nrank-1))),wwr(maxval(lnp(0:nrank-1))))
@@ -477,7 +477,7 @@ end subroutine HACApK_bicgstab_cax_lfmtx_hyp
  call HACApK_adotsub_lfmtx_hyp(zr,zshdw,st_leafmtxp,st_ctl,u,wws,wwr,isct,irct,nd)
  zshdw(:nd)=zr(:nd)
  zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
- if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
+ if(st_ctl%lpmd(30)==0) print*,'Original relative residual norm =',zrnorm/bnorm
  do in=1,mstep
    if(zrnorm/bnorm<eps) exit
    zp(:nd) =zr(:nd)+beta*(zp(:nd)-zeta*zakp(:nd))
@@ -498,7 +498,7 @@ end subroutine HACApK_bicgstab_cax_lfmtx_hyp
    call MPI_Barrier( icomm, ierr )
    en_measure_time=MPI_Wtime()
    time = en_measure_time - st_measure_time
-   if(st_ctl%param(1)>0 .and. mpinr==0) print*,in,time,log10(zrnorm/bnorm)
+   if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) print*,in,time,log10(zrnorm/bnorm)
  enddo
 end subroutine HACApK_bicgstab_lfmtx_hyp
 
