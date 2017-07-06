@@ -314,6 +314,7 @@ contains
      st_ctl%lsp_offset = loc(st_ctl%lsp(:))-loc(st_ctl%param(:))
      st_ctl%lnp_offset = loc(st_ctl%lnp(:))-loc(st_ctl%param(:))
 
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 #if defined(BICG_MAGMA_MGPU)
 !
 ! > multi-GPU/proc version <
@@ -431,6 +432,7 @@ contains
      endif
 #endif
      u(:nd) = u_copy(:nd)
+#endif
 #endif
 
    elseif(param(85)==2)then

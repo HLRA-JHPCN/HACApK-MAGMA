@@ -1,3 +1,6 @@
+
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
+
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<time.h>
@@ -1378,3 +1381,5 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     magma_free(zy);
     magma_free(zv);
 }
+
+#endif

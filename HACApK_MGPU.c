@@ -1,3 +1,6 @@
+
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
+
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<time.h>
@@ -942,5 +945,7 @@ void  c_hacapk_adot_body_lfdel_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp) {
     // let me finalize it here for now
     magma_finalize();
 }
+
+#endif
 
 #endif
