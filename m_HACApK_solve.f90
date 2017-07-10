@@ -443,9 +443,9 @@ end subroutine HACApK_bicgstab_lfmtx
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_tot   =',time_tot
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_mpi   =',time_mpi
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_spmv  =',time_spmv
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      > time_copy  =',time_copy
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      > time_set   =',time_set
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      > time_batch =',time_batch
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_copy  =',time_copy
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_set   =',time_set
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_hyp
 
 !***HACApK_bicgstab_lfmtx_hyp
@@ -982,9 +982,9 @@ end function HACApK_adot_pmt_lfmtx_hyp
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT    BiCG         =',time
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      time_mpi   =',time_mpi
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      time_spmv  =',time_spmv
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      > time_copy  =',time_copy
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      > time_set   =',time_set
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      > time_batch =',time_batch
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      >time_copy  =',time_copy
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      >time_set   =',time_set
+ if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      >time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_flat
 ! 
 !***HACApK_adot_cax_lfmtx_comm
