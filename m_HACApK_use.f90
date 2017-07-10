@@ -48,9 +48,9 @@ contains
  icomm=st_ctl%lpmd(1)
  lrtrn=HACApK_generate(st_leafmtxp,st_bemv,st_ctl,gmid,ztol)
 !
-! call MPI_Barrier( icomm, ierr )
-! lrtrn=HACApK_solve(st_leafmtxp,st_bemv,st_ctl,rhs,sol,ztol)
-! call MPI_Barrier( icomm, ierr )
+ call MPI_Barrier( icomm, ierr )
+ lrtrn=HACApK_solve(st_leafmtxp,st_bemv,st_ctl,rhs,sol,ztol)
+ call MPI_Barrier( icomm, ierr )
 !
  st_measure_time_ax=MPI_Wtime()
  call HACApK_measurez_time_ax_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
