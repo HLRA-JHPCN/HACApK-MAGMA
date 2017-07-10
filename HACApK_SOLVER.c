@@ -309,12 +309,12 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     if (st_ctl->param[0] > 0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
         if (mpinr == 0) {
-            printf( "       BiCG        = %.5e\n", time );
-            printf( "        time_mpi   = %.5e\n", time_mpi );
-            printf( "        time_spmv  = %.5e\n", time_spmv );
-            printf( "        > time_copy  = %.5e\n", time_copy );
-            printf( "        > time_set   = %.5e\n", time_set );
-            printf( "        > time_batch = %.5e\n", time_batch );
+            printf( "C-FLAT       BiCG        = %.5e\n", time );
+            printf( "C-FLAT        time_mpi   = %.5e\n", time_mpi );
+            printf( "C-FLAT        time_spmv  = %.5e\n", time_spmv );
+            printf( "C-FLAT        >time_copy  = %.5e\n", time_copy );
+            printf( "C-FLAT        >time_set   = %.5e\n", time_set );
+            printf( "C-FLAT        >time_batch = %.5e\n", time_batch );
         }
     }
     // delete matrix
