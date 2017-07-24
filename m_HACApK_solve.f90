@@ -110,6 +110,7 @@ contains
    ncsp=mod(mpinr+nrank-1,nrank)
    isct(1)=lnp(mpinr);isct(2)=lsp(mpinr); 
    do ic=1,nrank-1
+      call MPI_Barrier(icomm,ierr)
      tic = MPI_Wtime()
      call MPI_SENDRECV(isct,2,MPI_INTEGER,ncdp,1, &
                        irct,2,MPI_INTEGER,ncsp,1,icomm,ISTATUS,ierr)
@@ -435,17 +436,33 @@ end subroutine HACApK_bicgstab_lfmtx
 #endif
  2001 format(5(a,1pe15.8)/)
  2003 format(5(a,i,a,1pe9.2)/)
+ 2009 format(5(a,i4,a,1pe15.8)/)
  !if(st_ctl%param(1) > 0)  write(6,2003) ' End: ',mpinr,' ',time
  call MPI_Barrier( icomm, ierr )
  en_measure_time = MPI_Wtime()
  time = en_measure_time - st_measure_time
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN    BiCG         =',time
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_tot   =',time_tot
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_mpi   =',time_mpi
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_spmv  =',time_spmv
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_copy  =',time_copy
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_set   =',time_set
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_batch =',time_batch
+! write(*,*)"CHK:",mpinr,nrank mpinr=0,1,...,N-1 nrank=N
+ if(st_ctl%param(1)>0)then
+    do i=0,nrank-1
+       if(mpinr.eq.i)then
+          write(6,2009) 'FORTRAN',i,'  BiCG         =',time
+          write(6,2009) 'FORTRAN',i,'    time_tot   =',time_tot ! = total HACApK_adot_cax_lfmtx_hyp
+          write(6,2009) 'FORTRAN',i,'    time_mpi   =',time_mpi
+          write(6,2009) 'FORTRAN',i,'    time_spmv  =',time_spmv
+          write(6,2009) 'FORTRAN',i,'    >time_copy  =',time_copy
+          write(6,2009) 'FORTRAN',i,'    >time_set   =',time_set
+          write(6,2009) 'FORTRAN',i,'    >time_batch =',time_batch
+       endif
+       call MPI_Barrier(icomm,ierr)
+    enddo
+ endif
+! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN    BiCG         =',time
+! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_tot   =',time_tot
+! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_mpi   =',time_mpi
+! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      time_spmv  =',time_spmv
+! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_copy  =',time_copy
+! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_set   =',time_set
+! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_hyp
 
 !***HACApK_bicgstab_lfmtx_hyp

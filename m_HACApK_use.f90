@@ -48,9 +48,9 @@ contains
  icomm=st_ctl%lpmd(1)
  lrtrn=HACApK_generate(st_leafmtxp,st_bemv,st_ctl,gmid,ztol)
 !
- call MPI_Barrier( icomm, ierr )
- lrtrn=HACApK_solve(st_leafmtxp,st_bemv,st_ctl,rhs,sol,ztol)
- call MPI_Barrier( icomm, ierr )
+! call MPI_Barrier( icomm, ierr )
+! lrtrn=HACApK_solve(st_leafmtxp,st_bemv,st_ctl,rhs,sol,ztol)
+! call MPI_Barrier( icomm, ierr )
 !
  st_measure_time_ax=MPI_Wtime()
  call HACApK_measurez_time_ax_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
@@ -320,7 +320,7 @@ contains
 !
 ! Comment out since no mat-vec profile with multi-GPU option for now..  
 !#if !defined(REALLOCATE_MAGMA_BATCH)
-!! deallocate if have not done after SpMV on GPU.
+!! deallocate if have not done after MATVEC on GPU.
 !#if defined(BICG_MAGMA_BATCH)
 !     call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
 !#elif defined(BICG_MAGMA)
@@ -361,7 +361,7 @@ contains
 ! allocate/copy to GPU, if have not done it.
      call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
 #endif
-! SpMV on GPU
+! only MATVEC on GPU (magma, batched, ?)
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
@@ -370,7 +370,7 @@ contains
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
-       write(6,2000) ' time_HACApK_solve SpMV on GPU =',time_bicgstab
+       write(6,2000) ' time_HACApK_solve MATVEC on GPU =',time_bicgstab
        write(6,*) 
      endif
 
@@ -383,8 +383,34 @@ contains
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
-       write(6,2000) ' time_HACApK_flat SpMV on GPU =',time_bicgstab
+       write(6,2000) ' time_HACApK_flat MATVEC on GPU =',time_bicgstab
        write(6,*) 
+     endif
+
+! C full CPU (sequential)
+     u_copy(:nd) = u(:nd)
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_seq(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK FULL CPU SEQ =',time_bicgstab
+        write(6,*) 
+     endif
+
+! C full CPU (OpenMP)
+     u_copy(:nd) = u(:nd)
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK FULL CPU OMP =',time_bicgstab
+        write(6,*) 
      endif
 
 ! C version
@@ -396,7 +422,7 @@ contains
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
-       write(6,2000) ' time_c_HACApK SpMV on GPU =',time_bicgstab
+       write(6,2000) ' time_c_HACApK MATVEC on GPU =',time_bicgstab
        write(6,*) 
      endif
 
