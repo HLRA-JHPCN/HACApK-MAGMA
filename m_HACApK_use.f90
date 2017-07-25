@@ -387,6 +387,7 @@ contains
        write(6,*) 
      endif
 
+#if 0
 ! C full CPU (sequential)
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
@@ -399,6 +400,7 @@ contains
         write(6,2000) ' time_c_HACApK FULL CPU SEQ =',time_bicgstab
         write(6,*) 
      endif
+#endif
 
 ! C full CPU (OpenMP)
      u_copy(:nd) = u(:nd)
@@ -410,7 +412,33 @@ contains
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
         write(6,2000) ' time_c_HACApK FULL CPU OMP =',time_bicgstab
+        write(6,*)
+     endif
+
+! C MAGMA
+     u_copy(:nd) = u(:nd)
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_magma(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK MAGMA =',time_bicgstab
         write(6,*) 
+     endif
+
+! C OpenACC
+     u_copy(:nd) = u(:nd)
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_acc(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK OpenACC =',time_bicgstab
+        write(6,*)
      endif
 
 ! C version
