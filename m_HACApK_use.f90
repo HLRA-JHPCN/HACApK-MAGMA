@@ -428,6 +428,7 @@ contains
         write(6,*) 
      endif
 
+#if 0
 ! C OpenACC
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
@@ -440,6 +441,7 @@ contains
         write(6,2000) ' time_c_HACApK OpenACC =',time_bicgstab
         write(6,*)
      endif
+#endif
 
 ! C version
      u_copy(:nd) = u(:nd)

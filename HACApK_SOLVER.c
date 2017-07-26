@@ -448,7 +448,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
     free(zshdw);
 }
 
-void  c_hacapk_adot_body_lfcpy_gpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
+void  c_hacapk_adot_body_lfcpy_magma(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
   // local variables
   register int ip;
   int nlf, ndl, ndt, nstrtl, nstrtt, kt;
@@ -819,7 +819,7 @@ void c_hacapk_adot_body_lfdel_magma
   //  .. MATVEC ..
   tic = MPI_Wtime();
   dlaset_( "F", nd, &ione, &zero, &zero, zshdw, nd );
-  c_hacapk_adot_body_lfmtx_magma_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy);
+  c_hacapk_adot_body_lfmtx_magma_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
   time_spmv += (MPI_Wtime()-tic);
   c_hacapk_adot_cax_lfmtx_magma_comm(zshdw, st_ctl, wws, wwr, isct, irct, *nd, &time_mpi);
   //
@@ -847,7 +847,7 @@ void c_hacapk_adot_body_lfdel_magma
 	//  .. MATVEC ..
 	dlaset_( "F", nd, &ione, &zero, &zero, zakp, nd );
 	tic = MPI_Wtime();
-	c_hacapk_adot_body_lfmtx_magma_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy);
+	c_hacapk_adot_body_lfmtx_magma_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
 	time_spmv += (MPI_Wtime()-tic);
 	c_hacapk_adot_cax_lfmtx_magma_comm(zakp,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
@@ -864,7 +864,7 @@ void c_hacapk_adot_body_lfdel_magma
 	//  .. MATVEC ..
 	dlaset_( "F", nd, &ione, &zero, &zero, zakt, nd );
 	tic = MPI_Wtime();
-	c_hacapk_adot_body_lfmtx_magma_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy);
+	c_hacapk_adot_body_lfmtx_magma_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
 	time_spmv += (MPI_Wtime()-tic);
 	c_hacapk_adot_cax_lfmtx_magma_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
@@ -895,7 +895,7 @@ void c_hacapk_adot_body_lfdel_magma
   time = en_measure_time - st_measure_time;
   if (st_ctl->param[0] > 0) {
 	//printf( " End: %d, %.2e\n",mpinr,time );
-	for(i=0;i<nran;i++){
+	for(i=0;i<nrank;i++){
 	  if (mpinr == i) {
 		printf( "C-MAGMA %d   BiCG        = %.5e\n", i, time );
 		printf( "C-MAGMA %d   time_mpi   = %.5e\n", i, time_mpi );
@@ -1255,7 +1255,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 }
 
 // C + OpenACC
-
+#if 0
 void  c_hacapk_adot_body_lfmtx_acc_calc
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
  double *time_batch, double *time_set, double *time_copy, int nd) {
@@ -1340,6 +1340,7 @@ void  c_hacapk_adot_body_lfmtx_acc_calc
   */
   free(zaut); free(zbut);
 }
+#endif
 
 void c_hacapk_adot_cax_lfmtx_acc_comm
 (double *zau, stc_HACApK_lcontrol *st_ctl,
@@ -1396,6 +1397,7 @@ void c_hacapk_adot_cax_lfmtx_acc_comm
     }
 }
 
+#if 0
 void c_hacapk_bicgstab_cax_lfmtx_acc_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
@@ -1589,7 +1591,7 @@ void c_hacapk_bicgstab_cax_lfmtx_acc_
     free(zakt);
     free(zshdw);
 }
-
+#endif
 
 
 void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
@@ -1610,7 +1612,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     int info, step, mstep;
     int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
- 
+    int i;
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
@@ -1733,6 +1735,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 		  printf( "C-FLAT  %d   >time_batch = %.5e\n", i, time_batch );
         }
 		MPI_Barrier( icomm );
+	  }
     }
     // delete matrix
     c_hacapk_adot_body_lfdel_batch_(st_leafmtxp);
@@ -1773,7 +1776,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     int info, step, mstep;
     int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
- 
+    int i; 
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
@@ -1923,7 +1926,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     time = en_measure_time - st_measure_time;
     if (st_ctl->param[0] > 0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
-	  for(i=0;i<nran;i++){
+      for(i=0;i<nrank;i++){
         if (mpinr == i) {
 		  printf( "C-ALL   %d  BiCG        = %.5e\n", i, time );
 		  printf( "C-ALL   %d  time_mpi   = %.5e\n", i, time_mpi );
@@ -1933,6 +1936,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
 		  printf( "C-ALL   %d  > time_set   = %.5e\n", i, time_set );
         }
 		MPI_Barrier( icomm );
+      }
     }
     magma_queue_sync( queue );
     magma_queue_destroy( queue );
@@ -1984,7 +1988,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
     double time_set2, time_set3; 
-
+    int i;
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
@@ -2173,7 +2177,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     time = en_measure_time - st_measure_time;
     if (st_ctl->param[0] > 0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
-	  for(i=0;i<nran;i++){
+	  for(i=0;i<nrank;i++){
         if (mpinr == i) {
 		  printf( "  %d    BiCG        = %.5e\n", i, time );
 		  printf( "  %d    time_mpi   = %.5e\n", i, time_mpi );
@@ -2185,6 +2189,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 		  printf( "  %d    + time_set3 = %.5e\n", i, time_set3 );
         }
 		MPI_Barrier( icomm );
+	  }
     }
     for (d=0; d<gpus_per_proc; d++) {
         magma_setdevice((gpu_id+d)%procs_per_node);
@@ -2243,7 +2248,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
     double time_set2, time_set3; 
-
+    int i;
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
@@ -2476,7 +2481,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     time = en_measure_time - st_measure_time;
     if (st_ctl->param[0]>0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
-	  for(i=0;i<nran;i++){
+	  for(i=0;i<nrank;i++){
         if (mpinr == i) {
 		  printf( " %d     BiCG       = %.5e\n", i, time );
 		  printf( " %d     time_mpi  = %.5e\n", i, time_mpi );
@@ -2488,6 +2493,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
 		  printf( " %d       + time_set3 = %.5e\n", i, time_set3 );
         }
 		MPI_Barrier( icomm );
+	  }
     }
 
     // free gpu memory
@@ -2560,7 +2566,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     int info, step, mstep;
     int mpinr, nrank, ierr;
     double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
- 
+    int i;
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
@@ -2762,15 +2768,16 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     if (st_ctl->param[0] > 0) {
         //printf( " End: %d, %.2e\n",mpinr,time );
 	  for(i=0;i<nrank;i++){
-        if (mpinr == i) {
-		  printf( "   %d    BiCG        = %.5e\n", i, time );
-		  printf( "   %d    time_mpi   = %.5e\n", i, time_mpi );
-            printf( "   %d    time_copy  = %.5e\n", i, time_copy );
-            printf( "   %d    time_spmv  = %.5e\n", i, time_spmv );
-            printf( "   %d    > time_batch = %.5e\n", i, time_batch );
-            printf( "   %d    > time_set   = %.5e\n", i, time_set );
-        }
-		MPI_Barrier( icomm );
+	    if (mpinr == i) {
+	      printf( "   %d    BiCG        = %.5e\n", i, time );
+	      printf( "   %d    time_mpi   = %.5e\n", i, time_mpi );
+	      printf( "   %d    time_copy  = %.5e\n", i, time_copy );
+	      printf( "   %d    time_spmv  = %.5e\n", i, time_spmv );
+	      printf( "   %d    > time_batch = %.5e\n", i, time_batch );
+	      printf( "   %d    > time_set   = %.5e\n", i, time_set );
+	    }
+	    MPI_Barrier( icomm );
+	  }
     }
     magma_queue_destroy( queue );
     // delete matrix
