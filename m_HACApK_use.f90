@@ -400,7 +400,6 @@ contains
         write(6,2000) ' time_c_HACApK FULL CPU SEQ =',time_bicgstab
         write(6,*) 
      endif
-#endif
 
 ! C full CPU (OpenMP)
      u_copy(:nd) = u(:nd)
@@ -488,6 +487,9 @@ contains
 #endif
      u(:nd) = u_copy(:nd)
 #endif
+
+#endif
+
 
    elseif(param(85)==2)then
      call HACApK_gcrm_lfmtx(st_leafmtxp,st_ctl,st_bemv,u,b,param,nd,nstp,lrtrn)
