@@ -363,6 +363,9 @@ contains
 #endif
 ! only MATVEC on GPU (magma, batched, ?)
      u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_solve MATVEC on GPU begin"
+     endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
        call HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
@@ -376,6 +379,9 @@ contains
 
 ! a simpler "flat" version.
      u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_flat MATVEC on GPU begin"
+     endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
        call HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
@@ -387,9 +393,11 @@ contains
        write(6,*) 
      endif
 
-#if 0
 ! C full CPU (sequential)
      u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c FULL CPU SEQ begin"
+     endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
      call c_HACApK_bicgstab_cax_lfmtx_seq(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
@@ -403,6 +411,9 @@ contains
 
 ! C full CPU (OpenMP)
      u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c FULL CPU OMP begin"
+     endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
      call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
@@ -416,6 +427,9 @@ contains
 
 ! C MAGMA
      u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c MAGMA begin"
+     endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
      call c_HACApK_bicgstab_cax_lfmtx_magma(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
@@ -427,7 +441,7 @@ contains
         write(6,*) 
      endif
 
-#if 0
+#ifdef USE_ACC
 ! C OpenACC
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
@@ -441,6 +455,19 @@ contains
         write(6,*)
      endif
 #endif
+
+! CUDA C
+     u_copy(:nd) = u(:nd)
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA =',time_bicgstab
+        write(6,*)
+     endif
 
 ! C version
      u_copy(:nd) = u(:nd)
@@ -487,9 +514,6 @@ contains
 #endif
      u(:nd) = u_copy(:nd)
 #endif
-
-#endif
-
 
    elseif(param(85)==2)then
      call HACApK_gcrm_lfmtx(st_leafmtxp,st_ctl,st_bemv,u,b,param,nd,nstp,lrtrn)
