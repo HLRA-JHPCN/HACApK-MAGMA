@@ -30,9 +30,9 @@
 !C  last modified by Akihiro Ida on Jan. 2017
 !C**************************************************************************
 module m_HACApK_base
-#if defined(ISO_C_BINDING)
+!#if defined(ISO_C_BINDING)
  use iso_c_binding
-#endif
+!#endif
  use m_HACApK_calc_entry_ij
  implicit real*8(a-h,o-z)
  implicit integer*4(i-n)
@@ -56,7 +56,7 @@ module m_HACApK_base
     integer*4 kt
     integer*4 nstrtl,ndl;
     integer*4 nstrtt,ndt;
-    integer*8 a1size !!!
+    integer(c_size_t) a1size !!!
     real*8,pointer :: a1(:,:)=>null(),a2(:,:)=>null()
   end type st_HACApK_leafmtx
 

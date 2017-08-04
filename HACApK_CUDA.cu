@@ -7,9 +7,42 @@
 #include	"HACApK_MAGMA.h"
 //#include        "magma_dlapack.h"
 
-__global__ void calcA1
-()
+__global__ void cuda_matvec_a1
+(int kt, int ndt, int nstrtt, double *d_zbut, double *d_a1, double *d_zu)
 {
+  int il, it, itt, itl;
+  for(il=0; il<kt; il++){
+	for(it=0; it<ndt; it++){
+	  itt=it+nstrtt-1;
+	  itl=it+il*ndt; 
+	  d_zbut[il] += d_a1[itl]*d_zu[itt];
+	}
+  }
+}
+__global__ void cuda_matvec_a2
+(int kt, int ndl, int nstrtl, double *d_zaut, double *d_a2tmp, double *d_zbut)
+{
+  int il, it, ill, itl;
+  for(il=0; il<kt; il++){
+	for(it=0; it<ndl; it++){
+	  ill=it+nstrtl-1;
+	  itl=it+il*ndl; 
+	  d_zaut[ill] += d_a2tmp[itl]*d_zbut[il];
+	}
+  }
+}
+__global__ void cuda_matvec_s
+(int ndl, int ndt, int nstrtl, int nstrtt, double *d_zaut, double *d_a1, double *d_zu)
+{
+  int il, it, ill, itt, itl;
+  for(il=0; il<ndl; il++){
+	ill=il+nstrtl-1; 
+	for(it=0; it<ndt; it++){
+	  itt=it+nstrtt-1; 
+	  itl=it+il*ndt;
+	  d_zaut[ill] += d_a1[itl]*d_zu[itt];
+	}
+  }
 }
 
 void  c_hacapk_adot_body_lfmtx_cuda_calc
@@ -27,6 +60,7 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc
 
   double *d_zaut, *d_zbut;
   double *d_zau, *d_zu;
+  double *d_a1, *d_a2tmp;
   cudaMalloc(&d_zaut, sizeof(double)*nd);
   cudaMalloc(&d_zbut, sizeof(double)*st_leafmtxp->ktmax);
   cudaMalloc(&d_zau, sizeof(double)*nd);
@@ -49,7 +83,7 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc
   for(ip=0; ip<nlf; ip++){
 	/**/
 	stc_HACApK_leafmtx *sttmp;
-	sttmp = (stc_HACApK_leafmtx *)((void *)(st_leafmtxp->st_lf) + st_lf_stride * ip);
+	sttmp = (stc_HACApK_leafmtx *)((size_t)((void *)(st_leafmtxp->st_lf)) + st_lf_stride * ip);
 	//fprintf(stderr, "%d: %p\n", ip, sttmp);
 	/**/
 
@@ -58,15 +92,20 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc
 	nstrtl=sttmp->nstrtl; 
 	nstrtt=sttmp->nstrtt;
 	//fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
+	cudaMalloc(&d_a1, sizeof(double)*ndt);
+	cudaMemcpy(d_a1, sttmp->a1, sizeof(double)*ndt, cudaMemcpyHostToDevice);
+	cudaMalloc(&d_a2tmp, sizeof(double)*ndl*ndt);
 	if(nstrtl<ls)ls=nstrtl;
 	if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
 	if(sttmp->ltmtx==1){
 	  /**/
-	  double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+	  double *a2tmp = (double *)((size_t)((void*)(sttmp->a1))+sttmp->a1size);
 	  /**/
 	  kt=sttmp->kt;
 	  for(il=0;il<kt;il++)zbut[il]=0.0;
 	  cudaMemcpy(d_zbut, zbut, sizeof(double)*kt, cudaMemcpyHostToDevice);
+	  cudaMemcpy(d_a2tmp, a2tmp, sizeof(double)*ndl*ndt, cudaMemcpyHostToDevice);
+	  cuda_matvec_a1<<<1,1>>>(kt,ndt,nstrtt,d_zbut,d_a1,d_zu);
 	  /*
 	  for(il=0; il<kt; il++){
 		for(it=0; it<ndt; it++){
@@ -75,6 +114,9 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc
 		  zbut[il] += sttmp->a1[itl]*zu[itt];
 		}
 	  }
+	  */
+	  cuda_matvec_a2<<<1,1>>>(kt,ndl,nstrtl,d_zaut,d_a2tmp,d_zbut);
+	  /*
 	  for(il=0; il<kt; il++){
 		for(it=0; it<ndl; it++){
 		  ill=it+nstrtl-1;
@@ -83,7 +125,9 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc
 		}
 	  }
 	  */
+	  cudaMemcpy(zaut, d_zaut, sizeof(double)*nd, cudaMemcpyDeviceToHost);
 	} else if(sttmp->ltmtx==2){
+	  cuda_matvec_s<<<1,1>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,d_a1,d_zu);
 	  /*
 	  for(il=0; il<ndl; il++){
 		ill=il+nstrtl-1; 
@@ -94,7 +138,13 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc
 		}
 	  }
 	  */
+	  cudaMemcpy(zaut, d_zaut, sizeof(double)*nd, cudaMemcpyDeviceToHost);
 	}
+	cudaFree(d_a1);
+	cudaFree(d_a2tmp);
+  }
+  for(il=ls-1;il<=le-1;il++){
+	zau[il] += zaut[il];
   }
   /*
   for(il=ls-1;il<=le-1;il++){
@@ -113,14 +163,14 @@ void c_hacapk_adot_cax_lfmtx_cuda_comm
   double one = 1.0;
 
   double tic;
-  int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset); 
+  int *lpmd = (int*)((size_t)((void*)st_ctl->param) + st_ctl->lpmd_offset); 
   int mpinr = lpmd[2]; 
   int nrank = lpmd[1]; 
   int i;
    
   if (nrank > 1) {
-	int *lsp = (int*)((void*)st_ctl->param + st_ctl->lsp_offset);
-	int *lnp = (int*)((void*)st_ctl->param + st_ctl->lnp_offset);
+	int *lsp = (int*)((size_t)((void*)st_ctl->param) + st_ctl->lsp_offset);
+	int *lnp = (int*)((size_t)((void*)st_ctl->param) + st_ctl->lnp_offset);
 	MPI_Comm icomm = MPI_COMM_WORLD;
 
 	int ic;
@@ -161,6 +211,7 @@ void c_hacapk_adot_cax_lfmtx_cuda_comm
   }
 }
 
+extern "C"
 void c_hacapk_bicgstab_cax_lfmtx_cuda_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
@@ -172,7 +223,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
   // local arrays
   double *zr, *zshdw, *zp, *zt, *zkp, *zakp, *zkt, *zakt;
   double *wws, *wwr;
-  int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset);
+  int *lpmd = (int*)((size_t)((void*)st_ctl->param) + st_ctl->lpmd_offset);
   int isct[2], irct[2];
   // local variables
   double eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm;
@@ -234,7 +285,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
   for(i=0;i<(*nd);i++)zrnorm += zr[i]*zr[i];
   zrnorm = sqrt(zrnorm);
   if (mpinr == 0) {
-	printf( "\n ** BICG (c version, OMP) **\n" );
+	printf( "\n ** BICG (c version, CUDA) **\n" );
 	printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
 	printf( "c_HACApK_bicgstab_cax_lfmtx_cuda start\n" );
   }
@@ -323,12 +374,12 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
         //printf( " End: %d, %.2e\n",mpinr,time );
 	  for(i=0;i<nrank;i++){
 		if(i==mpinr){
-			printf( "C-OMP  %d  BiCG        = %.5e\n", i, time );
-			printf( "C-OMP  %d  time_mpi   = %.5e\n", i, time_mpi );
-			printf( "C-OMP  %d  time_matvec  = %.5e\n", i, time_spmv );
-			printf( "C-OMP  %d  >time_copy  = %.5e\n", i, time_copy );
-			printf( "C-OMP  %d  >time_set   = %.5e\n", i, time_set );
-			printf( "C-OMP  %d  >time_batch = %.5e\n", i, time_batch );
+			printf( "C-CUDA  %d  BiCG        = %.5e\n", i, time );
+			printf( "C-CUDA  %d  time_mpi   = %.5e\n", i, time_mpi );
+			printf( "C-CUDA  %d  time_matvec  = %.5e\n", i, time_spmv );
+			printf( "C-CUDA  %d  >time_copy  = %.5e\n", i, time_copy );
+			printf( "C-CUDA  %d  >time_set   = %.5e\n", i, time_set );
+			printf( "C-CUDA  %d  >time_batch = %.5e\n", i, time_batch );
 		}
 		MPI_Barrier( icomm );
 	  }
@@ -378,7 +429,7 @@ void  c_hacapk_adot_body_lfmtx_warp_calc
   for(ip=0; ip<nlf; ip++){
 	/**/
 	stc_HACApK_leafmtx *sttmp;
-	sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+	sttmp = (stc_HACApK_leafmtx *)((size_t)((void *)(st_leafmtxp->st_lf)) + st_lf_stride * ip);
 	//fprintf(stderr, "%d: %p\n", ip, sttmp);
 	/**/
 
@@ -391,7 +442,7 @@ void  c_hacapk_adot_body_lfmtx_warp_calc
 	if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
 	if(sttmp->ltmtx==1){
 	  /**/
-	  double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+	  double *a2tmp = (double *)((size_t)((void*)(sttmp->a1))+sttmp->a1size);
 	  /**/
 	  kt=sttmp->kt;
 	  for(il=0;il<kt;il++)zbut[il]=0.0;
@@ -434,14 +485,14 @@ void c_hacapk_adot_cax_lfmtx_warp_comm
   double one = 1.0;
 
   double tic;
-  int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset); 
+  int *lpmd = (int*)((size_t)((void*)st_ctl->param) + st_ctl->lpmd_offset); 
   int mpinr = lpmd[2]; 
   int nrank = lpmd[1]; 
   int i;
    
   if (nrank > 1) {
-	int *lsp = (int*)((void*)st_ctl->param + st_ctl->lsp_offset);
-	int *lnp = (int*)((void*)st_ctl->param + st_ctl->lnp_offset);
+	int *lsp = (int*)((size_t)((void*)st_ctl->param) + st_ctl->lsp_offset);
+	int *lnp = (int*)((size_t)((void*)st_ctl->param) + st_ctl->lnp_offset);
 	MPI_Comm icomm = MPI_COMM_WORLD;
 
 	int ic;
@@ -482,6 +533,7 @@ void c_hacapk_adot_cax_lfmtx_warp_comm
   }
 }
 
+extern "C"
 void c_hacapk_bicgstab_cax_lfmtx_warp_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
@@ -493,7 +545,7 @@ void c_hacapk_bicgstab_cax_lfmtx_warp_
   // local arrays
   double *zr, *zshdw, *zp, *zt, *zkp, *zakp, *zkt, *zakt;
   double *wws, *wwr;
-  int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset);
+  int *lpmd = (int*)((size_t)((void*)st_ctl->param) + st_ctl->lpmd_offset);
   int isct[2], irct[2];
   // local variables
   double eps, alpha, beta, zeta, zz, zden, znorm, znormold, bnorm, zrnorm;
@@ -555,9 +607,9 @@ void c_hacapk_bicgstab_cax_lfmtx_warp_
   for(i=0;i<(*nd);i++)zrnorm += zr[i]*zr[i];
   zrnorm = sqrt(zrnorm);
   if (mpinr == 0) {
-	printf( "\n ** BICG (c version, OMP) **\n" );
+	printf( "\n ** BICG (c version, WARP) **\n" );
 	printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
-	printf( "c_HACApK_bicgstab_cax_lfmtx_cuda start\n" );
+	printf( "c_HACApK_bicgstab_cax_lfmtx_warp start\n" );
   }
   for ( step=1; step<=mstep; step++ ) {
 	if (zrnorm/bnorm < eps) break;
@@ -644,12 +696,12 @@ void c_hacapk_bicgstab_cax_lfmtx_warp_
         //printf( " End: %d, %.2e\n",mpinr,time );
 	  for(i=0;i<nrank;i++){
 		if(i==mpinr){
-			printf( "C-OMP  %d  BiCG        = %.5e\n", i, time );
-			printf( "C-OMP  %d  time_mpi   = %.5e\n", i, time_mpi );
-			printf( "C-OMP  %d  time_matvec  = %.5e\n", i, time_spmv );
-			printf( "C-OMP  %d  >time_copy  = %.5e\n", i, time_copy );
-			printf( "C-OMP  %d  >time_set   = %.5e\n", i, time_set );
-			printf( "C-OMP  %d  >time_batch = %.5e\n", i, time_batch );
+			printf( "C-WARP  %d  BiCG        = %.5e\n", i, time );
+			printf( "C-WARP  %d  time_mpi   = %.5e\n", i, time_mpi );
+			printf( "C-WARP  %d  time_matvec  = %.5e\n", i, time_spmv );
+			printf( "C-WARP  %d  >time_copy  = %.5e\n", i, time_copy );
+			printf( "C-WARP  %d  >time_set   = %.5e\n", i, time_set );
+			printf( "C-WARP  %d  >time_batch = %.5e\n", i, time_batch );
 		}
 		MPI_Barrier( icomm );
 	  }

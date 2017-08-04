@@ -182,7 +182,7 @@ void  c_hacapk_adot_body_lfmtx_seq_calc
   register int ip,il,it;
   int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
   int st_lf_stride = st_leafmtxp->st_lf_stride;
-  int64_t a1size;
+  size_t a1size;
  
   nlf=st_leafmtxp->nlf;
   //fprintf(stderr,"nlf=%d \n",nlf);
@@ -934,7 +934,7 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
 	register int ip,il,it;
 	int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
 	int st_lf_stride = st_leafmtxp->st_lf_stride;
-	int64_t a1size;
+	size_t a1size;
 	int ith, nths, nthe;
 	double *zaut, *zbut;
 	int ls, le;
