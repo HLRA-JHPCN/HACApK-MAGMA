@@ -188,6 +188,7 @@ void  c_hacapk_adot_body_lfmtx_seq_calc
   //fprintf(stderr,"nlf=%d \n",nlf);
 
   for(ip=0; ip<nlf; ip++){
+    //ip=0;{
     /**/
     stc_HACApK_leafmtx *sttmp;
     sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
@@ -339,6 +340,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
   alpha = 0.0; beta = 0.0; zeta = 0.0;
   zz = 0.0; for(i=0;i<(*nd);i++)zz += b[i]*b[i];
   bnorm=sqrt(zz);
+  printf("bnorm:%e\n",bnorm);
   for(i=0;i<(*nd);i++)zr[i]=b[i];
   //  .. MATVEC ..
   tic = MPI_Wtime();
@@ -351,12 +353,14 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
   for(i=0;i<(*nd);i++)zshdw[i]=zr[i];
   zrnorm = 0.0; for(i=0;i<(*nd);i++)zrnorm += zr[i]*zr[i];
   zrnorm = sqrt(zrnorm);
+  printf("zrnorm:%e",zrnorm);
   if (mpinr == 0) {
-	printf( "\n ** BICG (c version, seq) **\n" );
-	printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
-	printf( "c_HACApK_bicgstab_cax_lfmtx_seq start\n" );
+    printf( "\n ** BICG (c version, seq) **\n" );
+    printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
+    printf( "c_HACApK_bicgstab_cax_lfmtx_seq start\n" );
   }
   for ( step=1; step<=mstep; step++ ) {
+    //for(step=1; step<=1; step++){
 	if (zrnorm/bnorm < eps) break;
 	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
 	if (beta == zero) {
@@ -366,6 +370,14 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 	    zp[i] = zr[i] + beta * (zp[i] + zeta*zakp[i]);
 	  }
 	}
+	/*
+	{
+	  FILE *F;
+	  F=fopen("seq-zp.dat","w");
+	  for(i=0;i<(*nd);i++)fprintf(F,"%e\n", zp[i]);
+	  fclose(F);
+	}
+	*/
 	// zkp(:nd) = zp(:nd)
 	for(i=0;i<(*nd);i++)zkp[i]=zp[i];
 	//  .. MATVEC ..
@@ -373,10 +385,26 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 	tic = MPI_Wtime();
 	c_hacapk_adot_body_lfmtx_seq_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy);
 	time_spmv += (MPI_Wtime()-tic);
+	/*
+	{
+	  FILE *F;
+	  F=fopen("seq-zakp.dat","w");
+	  for(i=0;i<(*nd);i++)fprintf(F,"%e\n", zakp[i]);
+	  fclose(F);
+	}
+	*/
 	c_hacapk_adot_cax_lfmtx_seq_comm(zakp,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
 	znorm = 0.0; for(i=0;i<(*nd);i++)znorm += zshdw[i]*zr[i];
 	zden = 0.0; for(i=0;i<(*nd);i++)zden += zshdw[i]*zakp[i];
+	/*
+	{
+	  FILE *F;
+	  F=fopen("seq.dat","w");
+	  fprintf(F,"%e %e\n",znorm, zden);
+	  fclose(F);
+	}
+	*/
 	alpha = -znorm/zden;
 	znormold = znorm;
 	// zt(:nd) = zr(:nd) - alpha*zakp(:nd)
@@ -395,6 +423,14 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 	znorm = 0.0; for(i=0;i<(*nd);i++)znorm += zakt[i]*zt[i];
 	zden = 0.0; for(i=0;i<(*nd);i++)zden += zakt[i]*zakt[i];
 	zeta = znorm/zden;
+	/*
+	{
+	  FILE *F;
+	  F=fopen("seq.dat","a");
+	  fprintf(F,"%e %e\n",znorm, zden);
+	  fclose(F);
+	}
+	*/
 	// u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
 	for(i=0;i<(*nd);i++)u[i]+=alpha*zkp[i];
 	for(i=0;i<(*nd);i++)u[i]+=zeta*zkt[i];
@@ -647,7 +683,7 @@ void  c_hacapk_adot_body_lfmtx_magma_calc
     MPI_Barrier(MPI_COMM_WORLD);
     magma_queue_sync( queue[0] );
     if (st_leafmtxp->mpi_rank == 0) {
-        printf( " time_gpu: %.2e seconds\n\n",MPI_Wtime()-tic );
+        printf( " time_gpu: %.2e seconds\n",MPI_Wtime()-tic );
     }
     // copy back
     magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue[0] );
@@ -954,6 +990,7 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
 	le = 1;
 #pragma omp for
 	for(ip=0; ip<nlf; ip++){
+	  //ip=0;{
 	  /**/
 	  stc_HACApK_leafmtx *sttmp;
 	  sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
@@ -967,6 +1004,7 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
 	  //fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
 	  if(nstrtl<ls)ls=nstrtl;
 	  if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
+	  //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
 	  if(sttmp->ltmtx==1){
 		/**/
 		double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
@@ -1116,15 +1154,34 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 #pragma omp parallel for reduction(+:zz)
   for(i=0;i<(*nd);i++){zz += b[i]*b[i];}
   bnorm=sqrt(zz);
+  printf("bnorm:%e\n",bnorm);
 #pragma omp parallel for
   for(i=0;i<(*nd);i++)zr[i]=b[i];
   //  .. MATVEC ..
   tic = MPI_Wtime();
   for(i=0;i<(*nd);i++)zshdw[i]=0.0;
   c_hacapk_adot_body_lfmtx_hyp_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
+  /*
+  {
+    FILE *F;
+    F=fopen("omp1.dat","w");
+    for(i=0;i<(*nd);i++){
+      fprintf(F,"%e\n",zshdw[i]);
+    }
+  }
+  */
   time_spmv += (MPI_Wtime()-tic);
   c_hacapk_adot_cax_lfmtx_hyp_comm(zshdw, st_ctl, wws, wwr, isct, irct, *nd, &time_mpi);
   //
+  /*
+  {
+    FILE *F;
+    F=fopen("omp2.dat","w");
+    for(i=0;i<(*nd);i++){
+      fprintf(F,"%e\n",zshdw[i]);
+    }
+  }
+  */
 #pragma omp parallel for
   for(i=0;i<(*nd);i++){
 	zr[i]+=mone*zshdw[i];
@@ -1134,12 +1191,15 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 #pragma omp parallel for reduction(+:zrnorm)
   for(i=0;i<(*nd);i++)zrnorm += zr[i]*zr[i];
   zrnorm = sqrt(zrnorm);
+  printf("zrnorm:%e\n",zrnorm);
+  //return;
   if (mpinr == 0) {
 	printf( "\n ** BICG (c version, OMP) **\n" );
 	printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
 	printf( "c_HACApK_bicgstab_cax_lfmtx_hyp start\n" );
   }
   for ( step=1; step<=mstep; step++ ) {
+    //for(step=1; step<=1; step++){
 	if (zrnorm/bnorm < eps) break;
 	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
 	if (beta == zero) {
@@ -1151,6 +1211,14 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	    zp[i] = zr[i] + beta * (zp[i] + zeta*zakp[i]);
 	  }
 	}
+	/*
+	{
+	  FILE *F;
+	  F=fopen("omp-zp.dat","w");
+	  for(i=0;i<(*nd);i++)fprintf(F,"%e\n", zp[i]);
+	  fclose(F);
+	}
+	*/
 	// zkp(:nd) = zp(:nd)
 #pragma omp parallel for
 	for(i=0;i<(*nd);i++)zkp[i]=zp[i];
@@ -1159,6 +1227,14 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	tic = MPI_Wtime();
 	c_hacapk_adot_body_lfmtx_hyp_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
 	time_spmv += (MPI_Wtime()-tic);
+	/*
+	{
+	  FILE *F;
+	  F=fopen("omp-zakp.dat","w");
+	  for(i=0;i<(*nd);i++)fprintf(F,"%e\n", zakp[i]);
+	  fclose(F);
+	}
+	*/
 	c_hacapk_adot_cax_lfmtx_hyp_comm(zakp,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
 	znorm = 0.0;
@@ -1167,6 +1243,14 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	zden = 0.0;
 #pragma omp parallel for reduction(+:zden)
 	for(i=0;i<(*nd);i++)zden += zshdw[i]*zakp[i];
+	/*
+	{
+	  FILE *F;
+	  F=fopen("omp.dat","w");
+	  fprintf(F,"%e %e\n",znorm, zden);
+	  fclose(F);
+	}
+	*/
 	alpha = -znorm/zden;
 	znormold = znorm;
 	// zt(:nd) = zr(:nd) - alpha*zakp(:nd)
@@ -1190,6 +1274,14 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 #pragma omp parallel for reduction(+:zden)
 	for(i=0;i<(*nd);i++)zden += zakt[i]*zakt[i];
 	zeta = znorm/zden;
+	/*
+	{
+	  FILE *F;
+	  F=fopen("omp.dat","a");
+	  fprintf(F,"%e %e\n",znorm, zden);
+	  fclose(F);
+	}
+	*/
 	// u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
 #pragma omp parallel for
 	for(i=0;i<(*nd);i++){

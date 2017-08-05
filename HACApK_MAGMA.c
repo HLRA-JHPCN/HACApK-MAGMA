@@ -138,7 +138,7 @@ void  c_hacapk_adot_body_lfmtx_cpu1_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     MPI_Barrier(MPI_COMM_WORLD);
     #ifdef PROF_MAGMA_BATCH
     if (st_leafmtxp->mpi_rank == 0) {
-        printf( " time_cpu: %.2e seconds\n\n",MPI_Wtime()-tic );
+        printf( " time_cpu: %.2e seconds\n",MPI_Wtime()-tic );
     }
     #endif
 }
@@ -224,7 +224,7 @@ void  c_hacapk_adot_body_lfmtx_gpu1_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     magma_queue_sync( queue[0] );
     #ifdef PROF_MAGMA_BATCH
     if (st_leafmtxp->mpi_rank == 0) {
-        printf( " time_gpu: %.2e seconds\n\n",MPI_Wtime()-tic );
+        printf( " time_gpu: %.2e seconds\n",MPI_Wtime()-tic );
     }
     #endif
     // copy back

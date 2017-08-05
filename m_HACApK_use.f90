@@ -458,6 +458,9 @@ contains
 
 ! CUDA C
      u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA begin"
+     endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
      call c_HACApK_bicgstab_cax_lfmtx_cuda(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
@@ -469,6 +472,7 @@ contains
         write(6,*)
      endif
 
+#if 0
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
@@ -480,6 +484,7 @@ contains
         write(6,2000) ' time_c_HACApK CUDA_WARP =',time_bicgstab
         write(6,*)
      endif
+#endif
 
 ! C version
      u_copy(:nd) = u(:nd)
