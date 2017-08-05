@@ -1243,6 +1243,8 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	zden = 0.0;
 #pragma omp parallel for reduction(+:zden)
 	for(i=0;i<(*nd);i++)zden += zshdw[i]*zakp[i];
+	printf("znorm:%e\n",znorm);
+	printf("zden:%e\n",zden);
 	/*
 	{
 	  FILE *F;
@@ -1273,7 +1275,10 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	zden = 0.0;
 #pragma omp parallel for reduction(+:zden)
 	for(i=0;i<(*nd);i++)zden += zakt[i]*zakt[i];
+	printf("znorm:%e\n",znorm);
+	printf("zden:%e\n",zden);
 	zeta = znorm/zden;
+	printf("zeta:%e\n",zeta);
 	/*
 	{
 	  FILE *F;
@@ -1301,6 +1306,8 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	zrnorm = 0.0;
 #pragma omp parallel for reduction(+:zrnorm)
 	for(i=0;i<(*nd);i++)zrnorm += zr[i]*zr[i];
+	printf("beta:%e\n",beta);
+	printf("zrnorm:%e\n",zrnorm);
         zrnorm = sqrt(zrnorm);
         *nstp = step;
         en_measure_time = MPI_Wtime();

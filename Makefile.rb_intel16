@@ -60,8 +60,8 @@ TARGET=bem-bb-SCM.out
 $(TARGET): $(OBJS) $(CUOBJS)
 	$(LINK) -o $@ $(CUOBJS) $(OBJS) $(LDFLAGS) $(LIBS)
 HACApK_CUDA.o: HACApK_CUDA.cu
-	nvcc -c -O3 -gencode arch=compute_60,code=\"sm_60,compute_60\" \
-	-ccbin icc -Xcompiler "-O3 -qopenmp -xCORE-AVX2 -restrict" \
+	nvcc -g -c -O3 -gencode arch=compute_60,code=\"sm_60,compute_60\" \
+	-ccbin icc -Xcompiler "-O3 -qopenmp -xCORE-AVX2 -restrict -g" \
 	-DHAVE_MAGMA \
 	-I$(MAGMA_DIR)/include \
 	-I/lustre/app/acc/cuda/8.0.44/include \
