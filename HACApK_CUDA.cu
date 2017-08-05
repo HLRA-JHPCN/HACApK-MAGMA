@@ -508,6 +508,8 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device
 	  }
 	}
       */
+      cudaFree(d_a1);
+      cudaFree(d_a2tmp);
     } else if(sttmp->ltmtx==2){
       cudaMalloc(&d_a1, sizeof(double)*ndt*ndl);
       cudaMemcpy(d_a1, sttmp->a1, sizeof(double)*ndt*ndl, cudaMemcpyHostToDevice);
@@ -523,9 +525,8 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device
 	  }
 	}
       */
+      cudaFree(d_a1);
     }
-    cudaFree(d_a1);
-    cudaFree(d_a2tmp);
   }
   /*
   cudaMemcpy(zaut, d_zaut, sizeof(double)*nd, cudaMemcpyDeviceToHost);
@@ -691,7 +692,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
 #pragma omp parallel for reduction(+:zrnorm)
   for(i=0;i<(*nd);i++)zrnorm += zr[i]*zr[i];
   zrnorm = sqrt(zrnorm);
-  printf("zrnorm:%e",zrnorm);
+  printf("zrnorm:%e\n",zrnorm);
   //return;
   if (mpinr == 0) {
 	printf( "\n ** BICG (c version, CUDA) **\n" );
@@ -743,6 +744,8 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
 	zden = 0.0;
 #pragma omp parallel for reduction(+:zden)
 	for(i=0;i<(*nd);i++)zden += zshdw[i]*zakp[i];
+	printf("znorm:%e\n",znorm);
+	printf("zden:%e\n",zden);
 	/*
 	{
 	  FILE *F;
@@ -773,7 +776,10 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
 	zden = 0.0;
 #pragma omp parallel for reduction(+:zden)
 	for(i=0;i<(*nd);i++)zden += zakt[i]*zakt[i];
+	printf("znorm:%e\n",znorm);
+	printf("zden:%e\n",zden);
 	zeta = znorm/zden;
+	printf("zeta:%e\n",zeta);
 	/*
 	{
 	  FILE *F;
@@ -801,6 +807,8 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
 	zrnorm = 0.0;
 #pragma omp parallel for reduction(+:zrnorm)
 	for(i=0;i<(*nd);i++)zrnorm += zr[i]*zr[i];
+	printf("beta:%e\n",beta);
+	printf("zrnorm:%e\n",zrnorm);
         zrnorm = sqrt(zrnorm);
         *nstp = step;
         en_measure_time = MPI_Wtime();
@@ -923,7 +931,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda2_
   printf("bnorm:%e\n",bnorm);
   //#pragma omp parallel for
   //for(i=0;i<(*nd);i++)zr[i]=b[i];
-  cudaMemcpy(d_zr,d_b,sizeof(double)*(*nd),cudaMemcpyHostToHost);
+  cudaMemcpy(d_zr,d_b,sizeof(double)*(*nd),cudaMemcpyDeviceToDevice);
   //  .. MATVEC ..
   tic = MPI_Wtime();
   //for(i=0;i<(*nd);i++)zshdw[i]=0.0;
@@ -966,176 +974,183 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda2_
   myCudaReductionZero<128><<<112,128>>>(d_zrnorm, d_zr, (*nd));
   cudaMemcpy(&zrnorm,d_zrnorm,sizeof(double),cudaMemcpyDeviceToHost);
   zrnorm = sqrt(zrnorm);
-  printf("zrnorm:%e",zrnorm);
+  printf("zrnorm:%e\n",zrnorm);
   //return;
   if (mpinr == 0) {
-	printf( "\n ** BICG (c version, CUDA) **\n" );
+	printf( "\n ** BICG (c version, CUDA2) **\n" );
 	printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
-	printf( "c_HACApK_bicgstab_cax_lfmtx_cuda start\n" );
+	printf( "c_HACApK_bicgstab_cax_lfmtx_cuda2 start\n" );
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-	if (zrnorm/bnorm < eps) break;
-	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
-	if (beta == zero) {
-	  //#pragma omp parallel for
-	  //for(i=0;i<(*nd);i++)zp[i]=zr[i];
-	  cudaMemcpy(d_zp,d_zr,sizeof(double)*(*nd), cudaMemcpyDeviceToDevice);
-	} else {
-	  /*
+    if (zrnorm/bnorm < eps) break;
+    // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
+    if (beta == zero) {
+      //#pragma omp parallel for
+      //for(i=0;i<(*nd);i++)zp[i]=zr[i];
+      cudaMemcpy(d_zp,d_zr,sizeof(double)*(*nd), cudaMemcpyDeviceToDevice);
+    } else {
+      /*
 #pragma omp parallel for
 	  for(i=0;i<(*nd);i++){
 	    zp[i] = zr[i] + beta * (zp[i] + zeta*zakp[i]);
 	  }
-	  */
-	  myCudaFunc2<<<112,128>>>(d_zp,d_zr,d_zakp,beta,zeta,(*nd));
-	}
-	/*
-	{
+      */
+      myCudaFunc2<<<112,128>>>(d_zp,d_zr,d_zakp,beta,zeta,(*nd));
+    }
+    /*
+      {
 	  FILE *F;
 	  F=fopen("cuda-zp.dat","w");
 	  for(i=0;i<(*nd);i++)fprintf(F,"%e\n", zp[i]);
 	  fclose(F);
-	}
-	*/
-	// zkp(:nd) = zp(:nd)
-	//#pragma omp parallel for
-	//for(i=0;i<(*nd);i++)zkp[i]=zp[i];
-	cudaMemcpy(d_zakp,d_zp,sizeof(double)*(*nd),cudaMemcpyDeviceToDevice);
-	//  .. MATVEC ..
-	//for(i=0;i<(*nd);i++)zakp[i]=0.0;
-	tic = MPI_Wtime();
-	//c_hacapk_adot_body_lfmtx_cuda_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
-	c_hacapk_adot_body_lfmtx_cuda_calc_device(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd);
-	time_spmv += (MPI_Wtime()-tic);
-	/*
-	{
+	  }
+    */
+    // zkp(:nd) = zp(:nd)
+    //#pragma omp parallel for
+    //for(i=0;i<(*nd);i++)zkp[i]=zp[i];
+    cudaMemcpy(d_zkp,d_zp,sizeof(double)*(*nd),cudaMemcpyDeviceToDevice);
+    //  .. MATVEC ..
+    //for(i=0;i<(*nd);i++)zakp[i]=0.0;
+    tic = MPI_Wtime();
+    //c_hacapk_adot_body_lfmtx_cuda_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
+    c_hacapk_adot_body_lfmtx_cuda_calc_device(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd);
+    time_spmv += (MPI_Wtime()-tic);
+    /*
+      {
 	  FILE *F;
 	  F=fopen("cuda-zakp.dat","w");
 	  for(i=0;i<(*nd);i++)fprintf(F,"%e\n", zakp[i]);
 	  fclose(F);
-	}
-	*/
-	//c_hacapk_adot_cax_lfmtx_cuda_comm(zakp,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
-	//
-	/*
+	  }
+    */
+    //c_hacapk_adot_cax_lfmtx_cuda_comm(zakp,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
+    //
+    /*
 	znorm = 0.0;
 #pragma omp parallel for reduction(+:znorm)
 	for(i=0;i<(*nd);i++)znorm += zshdw[i]*zr[i];
 	zden = 0.0;
 #pragma omp parallel for reduction(+:zden)
 	for(i=0;i<(*nd);i++)zden += zshdw[i]*zakp[i];
-	*/
-	myCudaReductionZero<128><<<112,128>>>(d_znorm,d_zshdw,d_zr,(*nd));
-	myCudaReductionZero<128><<<112,128>>>(d_zden,d_zshdw,d_zakp,(*nd));
-	/*
-	{
+    */
+    myCudaReductionZero<128><<<112,128>>>(d_znorm,d_zshdw,d_zr,(*nd));
+    myCudaReductionZero<128><<<112,128>>>(d_zden,d_zshdw,d_zakp,(*nd));
+    /*
+      {
 	  FILE *F;
 	  F=fopen("cuda.dat","w");
 	  fprintf(F,"%e %e\n",znorm, zden);
 	  fclose(F);
-	}
-	*/
-	cudaMemcpy(&znorm,d_znorm,sizeof(double),cudaMemcpyDeviceToHost);
-	cudaMemcpy(&zden,d_zden,sizeof(double),cudaMemcpyDeviceToHost);
-	alpha = -znorm/zden;
-	znormold = znorm;
-	// zt(:nd) = zr(:nd) - alpha*zakp(:nd)
-	//#pragma omp parallel for
-	//for(i=0;i<(*nd);i++)zt[i]=zr[i]+alpha*zakp[i];
-	myCudaFunc3<<<112,128>>>(d_zt,d_zr,alpha,d_zakp,*nd);
-	alpha = -alpha;
-	// zkt(:nd) = zt(:nd)
-	//#pragma omp parallel for
-	//for(i=0;i<(*nd);i++)zkt[i]=zt[i];
-	cudaMemcpy(d_zkt,d_zt,sizeof(double)*(*nd),cudaMemcpyDeviceToDevice);
-	//  .. MATVEC ..
-	//for(i=0;i<(*nd);i++)zakt[i]=0.0;
-	tic = MPI_Wtime();
-	//c_hacapk_adot_body_lfmtx_cuda_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
-	c_hacapk_adot_body_lfmtx_cuda_calc_device(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd);
-	time_spmv += (MPI_Wtime()-tic);
-	//c_hacapk_adot_cax_lfmtx_cuda_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
-	//
-	/*
+	  }
+    */
+    cudaMemcpy(&znorm,d_znorm,sizeof(double),cudaMemcpyDeviceToHost);
+    cudaMemcpy(&zden,d_zden,sizeof(double),cudaMemcpyDeviceToHost);
+    printf("znorm:%e\n",znorm);
+    printf("zden:%e\n",zden);
+    alpha = -znorm/zden;
+    znormold = znorm;
+    // zt(:nd) = zr(:nd) - alpha*zakp(:nd)
+    //#pragma omp parallel for
+    //for(i=0;i<(*nd);i++)zt[i]=zr[i]+alpha*zakp[i];
+    myCudaFunc3<<<112,128>>>(d_zt,d_zr,alpha,d_zakp,*nd);
+    alpha = -alpha;
+    // zkt(:nd) = zt(:nd)
+    //#pragma omp parallel for
+    //for(i=0;i<(*nd);i++)zkt[i]=zt[i];
+    cudaMemcpy(d_zkt,d_zt,sizeof(double)*(*nd),cudaMemcpyDeviceToDevice);
+    //  .. MATVEC ..
+    //for(i=0;i<(*nd);i++)zakt[i]=0.0;
+    tic = MPI_Wtime();
+    //c_hacapk_adot_body_lfmtx_cuda_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
+    c_hacapk_adot_body_lfmtx_cuda_calc_device(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd);
+    time_spmv += (MPI_Wtime()-tic);
+    //c_hacapk_adot_cax_lfmtx_cuda_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
+    //
+    /*
 	znorm = 0.0;
 #pragma omp parallel for reduction(+:znorm)
 	for(i=0;i<(*nd);i++)znorm += zakt[i]*zt[i];
 	zden = 0.0;
 #pragma omp parallel for reduction(+:zden)
 	for(i=0;i<(*nd);i++)zden += zakt[i]*zakt[i];
-	zeta = znorm/zden;
-	*/
-	myCudaReductionZero<128><<<112,128>>>(d_znorm,d_zakt,d_zt,(*nd));
-	myCudaReductionZero<128><<<112,128>>>(d_zden,d_zakt,(*nd));
-	cudaMemcpy(&znorm,d_znorm,sizeof(double),cudaMemcpyDeviceToHost);
-	cudaMemcpy(&zden,d_zden,sizeof(double),cudaMemcpyDeviceToHost);
-	/*
-	{
+    */
+    myCudaReductionZero<128><<<112,128>>>(d_znorm,d_zakt,d_zt,(*nd));
+    myCudaReductionZero<128><<<112,128>>>(d_zden,d_zakt,(*nd));
+    cudaMemcpy(&znorm,d_znorm,sizeof(double),cudaMemcpyDeviceToHost);
+    cudaMemcpy(&zden,d_zden,sizeof(double),cudaMemcpyDeviceToHost);
+    printf("znorm:%e\n",znorm);
+    printf("zden:%e\n",zden);
+    zeta = znorm/zden;
+    printf("zeta:%e\n",zeta);
+    /*
+      {
 	  FILE *F;
 	  F=fopen("cuda.dat","a");
 	  fprintf(F,"%e %e\n",znorm, zden);
 	  fclose(F);
-	}
-	*/
-	// u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
-	/*
+	  }
+    */
+    // u(:nd) = u(:nd) + alpha*zkp(:nd) + zeta*zkt(:nd)
+    /*
 #pragma omp parallel for
 	for(i=0;i<(*nd);i++){
 	  u[i] += alpha*zkp[i] + zeta*zkt[i];
 	}
-	*/
-	myCudaFunc4<<<112,128>>>(d_u,alpha,d_zakp,zeta,d_zkt,*nd);
-	// zr(:nd) = zt(:nd) - zeta*zakt(:nd)
-	zeta = -zeta;
-	/*
+    */
+    myCudaFunc4<<<112,128>>>(d_u,alpha,d_zkp,zeta,d_zkt,*nd);
+    // zr(:nd) = zt(:nd) - zeta*zakt(:nd)
+    zeta = -zeta;
+    /*
 #pragma omp parallel
 	for(i=0;i<(*nd);i++){
 	  zr[i]=zt[i] + zeta*zakt[i];
 	}
-	*/
-	myCudaFunc5<<<112,128>>>(d_zr,d_zt,zeta,d_zakt,*nd);
-	// beta = alpha/zeta * HACApK_dotp_d(nd,zshdw,zr)/znormold;
-	/*
+    */
+    myCudaFunc5<<<112,128>>>(d_zr,d_zt,zeta,d_zakt,*nd);
+    // beta = alpha/zeta * HACApK_dotp_d(nd,zshdw,zr)/znormold;
+    /*
 	beta = 0.0;
 #pragma omp parallel for reduction(+:beta)
 	for(i=0;i<(*nd);i++)beta += zshdw[i]*zr[i];
-	*/
-	myCudaReductionZero<128><<<112,128>>>(d_beta,d_zshdw,d_zr,*nd);
-	cudaMemcpy(&beta,d_beta,sizeof(double),cudaMemcpyDeviceToHost);
-	beta = -alpha/zeta * beta/znormold;
-	/*
+    */
+    myCudaReductionZero<128><<<112,128>>>(d_beta,d_zshdw,d_zr,*nd);
+    cudaMemcpy(&beta,d_beta,sizeof(double),cudaMemcpyDeviceToHost);
+    beta = -alpha/zeta * beta/znormold;
+    /*
 	zrnorm = 0.0;
 #pragma omp parallel for reduction(+:zrnorm)
 	for(i=0;i<(*nd);i++)zrnorm += zr[i]*zr[i];
-	*/
-	myCudaReductionZero<128><<<112,128>>>(d_zrnorm,d_zr,*nd);
-	cudaMemcpy(&zrnorm,d_zrnorm,sizeof(double),cudaMemcpyDeviceToHost);
-        zrnorm = sqrt(zrnorm);
-        *nstp = step;
-        en_measure_time = MPI_Wtime();
-        time = en_measure_time - st_measure_time;
-        if (st_ctl->param[0] > 0 && mpinr == 0) {
-            printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
-        }
-    }
-    MPI_Barrier( icomm );
+    */
+    myCudaReductionZero<128><<<112,128>>>(d_zrnorm,d_zr,*nd);
+    cudaMemcpy(&zrnorm,d_zrnorm,sizeof(double),cudaMemcpyDeviceToHost);
+    printf("beta:%e\n",beta);
+    printf("zrnorm:%e\n",zrnorm);
+    zrnorm = sqrt(zrnorm);
+    *nstp = step;
     en_measure_time = MPI_Wtime();
     time = en_measure_time - st_measure_time;
-    if (st_ctl->param[0] > 0) {
-      //printf( " End: %d, %.2e\n",mpinr,time );
-      for(i=0;i<nrank;i++){
-	if(i==mpinr){
-	  printf( "C-CUDA2  %d  BiCG        = %.5e\n", i, time );
-	  printf( "C-CUDA2  %d  time_mpi   = %.5e\n", i, time_mpi );
-	  printf( "C-CUDA2  %d  time_matvec  = %.5e\n", i, time_spmv );
-	  printf( "C-CUDA2  %d  >time_copy  = %.5e\n", i, time_copy );
-	  printf( "C-CUDA2  %d  >time_set   = %.5e\n", i, time_set );
-	  printf( "C-CUDA2  %d  >time_batch = %.5e\n", i, time_batch );
-	}
-	MPI_Barrier( icomm );
-      }
+    if (st_ctl->param[0] > 0 && mpinr == 0) {
+      printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
     }
+  }
+  MPI_Barrier( icomm );
+  en_measure_time = MPI_Wtime();
+  time = en_measure_time - st_measure_time;
+  if (st_ctl->param[0] > 0) {
+    //printf( " End: %d, %.2e\n",mpinr,time );
+    for(i=0;i<nrank;i++){
+      if(i==mpinr){
+	printf( "C-CUDA2  %d  BiCG        = %.5e\n", i, time );
+	printf( "C-CUDA2  %d  time_mpi   = %.5e\n", i, time_mpi );
+	printf( "C-CUDA2  %d  time_matvec  = %.5e\n", i, time_spmv );
+	printf( "C-CUDA2  %d  >time_copy  = %.5e\n", i, time_copy );
+	printf( "C-CUDA2  %d  >time_set   = %.5e\n", i, time_set );
+	printf( "C-CUDA2  %d  >time_batch = %.5e\n", i, time_batch );
+      }
+      MPI_Barrier( icomm );
+    }
+  }
     // delete matrix
     //c_hacapk_adot_body_lfdel_batch_(st_leafmtxp);
 

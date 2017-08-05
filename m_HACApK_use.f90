@@ -456,6 +456,7 @@ contains
      endif
 #endif
 
+#if 1
 ! CUDA C
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -469,6 +470,23 @@ contains
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
         write(6,2000) ' time_c_HACApK CUDA =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+
+! CUDA C
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA2 begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda2(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA2 =',time_bicgstab
         write(6,*)
      endif
 
@@ -486,6 +504,7 @@ contains
      endif
 #endif
 
+# if 0
 ! C version
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
@@ -511,6 +530,7 @@ contains
        write(6,2000) ' time_c_HACApK all on GPU =',time_bicgstab
        write(6,*) 
      endif
+#endif
 
 ! C version, pipeline on one GPU / proc
 #if defined(PIPE_BICG)
