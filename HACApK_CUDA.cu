@@ -84,7 +84,7 @@ __global__ void cuda_matvec_a1_2_smo
 	tmp += __shfl_down(tmp, offset);
       }
     }
-    if(tid==0)d_zbut[il] += tmp;
+    if(tid==0)d_zbut[il] = tmp;
   }
 }
 
@@ -728,7 +728,7 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
   int st_lf_stride = st_leafmtxp->st_lf_stride;
   size_t a1size;
   int ith, nths, nthe;
-  double *zaut, *zbut;
+  double *zaut;//, *zbut;
   int ls, le;
   int i;
 
@@ -741,12 +741,13 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
 
   nlf=st_leafmtxp->nlf;
   //fprintf(stderr,"nlf=%d \n",nlf);
-
+  /*
   zaut = (double*)malloc(sizeof(double)*nd);
   for(il=0;il<nd;il++)zaut[il]=0.0;
+  */
   cudaMemset(d_zaut, 0.0, sizeof(double)*nd);
   //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
-  zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
+  //zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
   ls = nd;
   le = 1;
   for(ip=0; ip<nlf; ip++){
@@ -767,11 +768,12 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
     //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
     if(sttmp->ltmtx==1){
       /**/
-      double *a2tmp = (double *)((size_t)((void*)(sttmp->a1))+sttmp->a1size);
+      //double *a2tmp = (double *)((size_t)((void*)(sttmp->a1))+sttmp->a1size);
       /**/
       kt=sttmp->kt;
-      for(il=0;il<kt;il++)zbut[il]=0.0;
-      cudaMemcpy(d_zbut, zbut, sizeof(double)*kt, cudaMemcpyHostToDevice);
+      //for(il=0;il<kt;il++)zbut[il]=0.0;
+      //cudaMemcpy(d_zbut, zbut, sizeof(double)*kt, cudaMemcpyHostToDevice);
+      //cudaMemset(d_zbut, 0.0, sizeof(double)*kt);
       cuda_matvec_a1_2_smo<128><<<112,128>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1);
       /*
 	for(il=0; il<kt; il++){
@@ -819,7 +821,7 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
     zau[il] += zaut[il];
     }
   */
-  free(zaut); free(zbut);
+  //free(zaut); free(zbut);
   cudaFree(d_zaut); cudaFree(d_zbut);
 }
 
