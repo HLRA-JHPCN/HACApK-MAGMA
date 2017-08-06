@@ -361,6 +361,7 @@ contains
 ! allocate/copy to GPU, if have not done it.
      call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
 #endif
+#if 0
 ! only MATVEC on GPU (magma, batched, ?)
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -376,7 +377,8 @@ contains
        write(6,2000) ' time_HACApK_solve MATVEC on GPU =',time_bicgstab
        write(6,*) 
      endif
-
+#endif
+#if 0
 ! a simpler "flat" version.
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -392,7 +394,8 @@ contains
        write(6,2000) ' time_HACApK_flat MATVEC on GPU =',time_bicgstab
        write(6,*) 
      endif
-
+#endif
+#if 0
 ! C full CPU (sequential)
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -408,7 +411,8 @@ contains
         write(6,2000) ' time_c_HACApK FULL CPU SEQ =',time_bicgstab
         write(6,*) 
      endif
-
+#endif
+#if 1
 ! C full CPU (OpenMP)
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -416,7 +420,7 @@ contains
      endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,0)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
@@ -424,7 +428,43 @@ contains
         write(6,2000) ' time_c_HACApK FULL CPU OMP =',time_bicgstab
         write(6,*)
      endif
-
+#endif
+#if 0
+! C full CPU (OpenMP + load balance)
+! load balance array is not implemented ?
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c FULL CPU OMP/lb begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,1)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK FULL CPU OMP/lb =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! C full CPU (OpenMP + MKL-seq)
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c FULL CPU OMP + MKL-seq begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_hyp_mkl(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK FULL CPU OMP + MKL-seq =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
 ! C MAGMA
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -440,7 +480,7 @@ contains
         write(6,2000) ' time_c_HACApK MAGMA =',time_bicgstab
         write(6,*) 
      endif
-
+#endif
 #ifdef USE_ACC
 ! C OpenACC
      u_copy(:nd) = u(:nd)
@@ -508,20 +548,92 @@ contains
      endif
 #endif
 #if 0
+! CUDA C, 1BLOCK
      u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA4(1BLOCK) begin"
+     endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-     call c_HACApK_bicgstab_cax_lfmtx_warp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call c_HACApK_bicgstab_cax_lfmtx_cuda4(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
-        write(6,2000) ' time_c_HACApK CUDA_WARP =',time_bicgstab
+        write(6,2000) ' time_c_HACApK CUDA4 =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! CUDA C, ASYNC (32)
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA5(ASYNC) begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,32,0)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA5 =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 0
+! CUDA C, ASYNC (nlf)
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA5(ASYNC) begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,st_leafmtxp%nlf)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA5 =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! CUDA C, ASYNC2
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA5a(ASYNC2) begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,32,1)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA5a =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 0
+! CUDA C+CUBLAS
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA6(CUBLAS) begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda6(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA6 =',time_bicgstab
         write(6,*)
      endif
 #endif
 
-# if 0
+# if 1
 ! C version
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
@@ -548,7 +660,7 @@ contains
        write(6,*) 
      endif
 #endif
-
+#if 0
 ! C version, pipeline on one GPU / proc
 #if defined(PIPE_BICG)
      u_copy(:nd) = u(:nd)
@@ -568,7 +680,7 @@ contains
 #endif
      u(:nd) = u_copy(:nd)
 #endif
-
+#endif
    elseif(param(85)==2)then
      call HACApK_gcrm_lfmtx(st_leafmtxp,st_ctl,st_bemv,u,b,param,nd,nstp,lrtrn)
    else
