@@ -720,7 +720,52 @@ void myCudaCopyAll(struct stc_matrixoffset *smo, stc_HACApK_leafmtxp *st_leafmtx
   printf("myCudaCopyAll: end\n"); fflush(stdout);
 }
 
-int myCublasSetMatrix(struct stc_cublasmatrices *scm, stc_HACApK_leafmtxp *st_leafmtxp)
+void myCublasMakeMatrix(stc_HACApK_leafmtxp *st_leafmtxp, struct stc_cublasmatrices *scm)
+{
+  int nlf, ip, ndt, ndl, kt;
+  int st_lf_stride = st_leafmtxp->st_lf_stride;
+  nlf=st_leafmtxp->nlf;
+  printf("myCudaCopyAllMatrix: begin\n"); fflush(stdout);
+  //printf("myCudaCopyAll: %d nodes\n", nlf); fflush(stdout);
+  //printf("myCudaCopyAll: check total memory\n"); fflush(stdout);
+  for(ip=0; ip<nlf; ip++){
+    stc_HACApK_leafmtx *sttmp;
+    sttmp = (stc_HACApK_leafmtx *)((size_t)((void *)(st_leafmtxp->st_lf)) + st_lf_stride * ip);
+    ndl   =sttmp->ndl; 
+    ndt   =sttmp->ndt;
+    if(sttmp->ltmtx==1){
+      double *a2tmp = (double *)((size_t)((void*)(sttmp->a1))+sttmp->a1size);
+      kt=sttmp->kt;
+      cudaMalloc(&scm[ip].d1, sizeof(double)*kt*ndt);
+      //cudaMemcpy(scm[ip].d1, sttmp->a1, sizeof(double)*kt*ndt, cudaMemcpyHostToDevice);
+      cudaMalloc(&scm[ip].d2, sizeof(double)*kt*ndl);
+      //cudaMemcpy(scm[ip].d2, a2tmp, sizeof(double)*kt*ndl, cudaMemcpyHostToDevice);
+    } else if(sttmp->ltmtx==2){
+      cudaMalloc(&scm[ip].d1, sizeof(double)*ndl*ndt);
+      //cudaMemcpy(scm[ip].a1, sttmp->a1,sizeof(double)*ndl*ndt,cudaMemcpyHostToDevice);
+    }
+  }
+  printf("myCudaCopyAllMatrix: end\n"); fflush(stdout);
+}
+void myCublasDestroyMatrix(struct stc_matrixoffset *smo, stc_HACApK_leafmtxp *st_leafmtxp, struct stc_cublasmatrices *scm)
+{
+  int nlf, ip, ndt, ndl, kt;
+  int st_lf_stride = st_leafmtxp->st_lf_stride;
+  size_t offset;
+  nlf=st_leafmtxp->nlf;
+  for(ip=0; ip<nlf; ip++){
+    stc_HACApK_leafmtx *sttmp;
+    sttmp = (stc_HACApK_leafmtx *)((size_t)((void *)(st_leafmtxp->st_lf)) + st_lf_stride * ip);
+    if(sttmp->ltmtx==1){
+      cudaFree(&scm[ip].d1);
+      cudaFree(&scm[ip].d2);
+    } else if(sttmp->ltmtx==2){
+      cudaFree(&scm[ip].d1);
+    }
+  }
+}
+
+int myCublasSetMatrix(stc_HACApK_leafmtxp *st_leafmtxp, struct stc_cublasmatrices *scm)
 {
 #define CHK_ERROR(st) \
   switch(st){ \
@@ -741,12 +786,12 @@ int myCublasSetMatrix(struct stc_cublasmatrices *scm, stc_HACApK_leafmtxp *st_le
     if(sttmp->ltmtx==1){
       double *a2tmp = (double *)((size_t)((void*)(sttmp->a1))+sttmp->a1size);
       kt=sttmp->kt;
-      st = cublasSetMatrix(kt,ndt,sizeof(double),sttmp->a1,ndt,scm[ip].d1,ndt);
+      st = cublasSetMatrix(ndt,kt,sizeof(double),sttmp->a1,ndt,scm[ip].d1,ndt);
       if(st!=CUBLAS_STATUS_SUCCESS){printf("cublasSetMatrix: failed (%d,d1)\n", ip); CHK_ERROR(st); return -1;}
-      st = cublasSetMatrix(ndl,kt,sizeof(double),a2tmp,kt,scm[ip].d2,kt);
+      st = cublasSetMatrix(ndl,kt,sizeof(double),a2tmp,ndl,scm[ip].d2,ndl);
       if(st!=CUBLAS_STATUS_SUCCESS){printf("cublasSetMatrix: failed (%d,d2)\n", ip); CHK_ERROR(st); return -1;}
     } else if(sttmp->ltmtx==2){
-      st = cublasSetMatrix(ndl,ndt,sizeof(double),sttmp->a1,ndt,scm[ip].d1,ndt);
+      st = cublasSetMatrix(ndt,ndl,sizeof(double),sttmp->a1,ndt,scm[ip].d1,ndt);
       if(st!=CUBLAS_STATUS_SUCCESS){printf("cublasSetMatrix: failed (%d)\n", ip); CHK_ERROR(st); return -1;}
     }
   }
@@ -978,21 +1023,22 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
 
 void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_cublas
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
- double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo, double *d_mat,
- cublasHandle_t handle, struct stc_cublasmatrices *scm) {
+ double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo,
+ cublasHandle_t handle, struct stc_cublasmatrices *scm, double *d_mat, double *d_zaut, double *d_zbut) {
   register int ip,il,it;
   int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
   int st_lf_stride = st_leafmtxp->st_lf_stride;
-  size_t a1size;
   int ith, nths, nthe;
   double *zaut;//, *zbut;
   int ls, le;
   int i;
-  double done=1.0;
+  double done=1.0, dzero=0.0;
 
-  double *d_zaut, *d_zbut;
+  //double *d_zaut, *d_zbut;
+  /*
   cudaMalloc(&d_zaut, sizeof(double)*nd);
   cudaMalloc(&d_zbut, sizeof(double)*st_leafmtxp->ktmax);
+  */
   cudaMemset(zau, 0.0, sizeof(double)*nd);
 
   nlf=st_leafmtxp->nlf;
@@ -1011,16 +1057,17 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_cublas
     if(sttmp->ltmtx==1){
       kt=sttmp->kt;
       //cuda_matvec_a1_2_smo<128><<<112,128>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1);
-      cublasDgemv(handle,CUBLAS_OP_T,ndt,kt,&done,scm[ip].d1,ndt,zu,1,&done,d_zbut,1);
+      cudaMemset(d_zbut, 0.0, sizeof(double)*kt);
+      cublasDgemv(handle,CUBLAS_OP_T, ndt,kt, &done,scm[ip].d1, ndt,&zu[nstrtt-1],1,&done,d_zbut,1);
       //cuda_matvec_a2_2b_smo<128><<<112,128>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2);
-      cublasDgemv(handle,CUBLAS_OP_N,ndl,kt,&done,scm[ip].d2,ndl,d_zbut,1,&done,d_zaut,1);
+      cublasDgemv(handle,CUBLAS_OP_N, ndl,kt, &done,scm[ip].d2, ndl,d_zbut,1,&done,&d_zaut[nstrtl-1],1);
     } else if(sttmp->ltmtx==2){
       //cuda_matvec_s_2_smo<128><<<112,128>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1);
-      cublasDgemv(handle,CUBLAS_OP_T,ndl,kt,&done,scm[ip].d1,ndt,zu,1,&done,zu,1);
+      cublasDgemv(handle,CUBLAS_OP_T, ndt,ndl, &done,scm[ip].d1, ndt,&zu[nstrtt-1],1,&done,&d_zaut[nstrtl-1],1);
     }
   }
   cuda_vadd<<<112,128>>>(zau,d_zaut,nd);
-  cudaFree(d_zaut); cudaFree(d_zbut);
+  //cudaFree(d_zaut); cudaFree(d_zbut);
 }
 
 void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_1blk
@@ -1067,7 +1114,7 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_1blk
 void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
  double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo, double *d_mat,
- cudaStream_t *s, int streams) {
+ cudaStream_t *s, int streams, double *d_zaut, double **d_zbut) {
   register int ip,il,it;
   int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
   int st_lf_stride = st_leafmtxp->st_lf_stride;
@@ -1076,12 +1123,6 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
   double *zaut;
   int ls, le;
   int i;
-  double *d_zaut, **d_zbut;
-  cudaMalloc(&d_zaut, sizeof(double)*nd);
-  d_zbut = (double**)malloc(sizeof(double*)*streams);
-  for(i=0;i<streams;i++){
-    cudaMalloc(&d_zbut[i], sizeof(double)*st_leafmtxp->ktmax);
-  }
   cudaMemset(zau, 0.0, sizeof(double)*nd);
   nlf=st_leafmtxp->nlf;
   cudaMemset(d_zaut, 0.0, sizeof(double)*nd);
@@ -1107,14 +1148,12 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
   cudaThreadSynchronize();
   //for(i=0;i<streams;i++){cudaStreamSynchronize(s[i]);}
   cuda_vadd<<<112,128>>>(zau,d_zaut,nd);
-  cudaFree(d_zaut);
-  for(i=0;i<streams;i++)cudaFree(d_zbut[i]); free(d_zbut);
 }
 
 void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
  double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo, double *d_mat,
- cudaStream_t *s, int streams) {
+ cudaStream_t *s, int streams, double *d_zaut, double **d_zbut) {
   register int ip,il,it;
   int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
   int st_lf_stride = st_leafmtxp->st_lf_stride;
@@ -1123,12 +1162,6 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
   double *zaut;
   int ls, le;
   int i;
-  double *d_zaut, **d_zbut;
-  cudaMalloc(&d_zaut, sizeof(double)*nd);
-  d_zbut = (double**)malloc(sizeof(double*)*streams);
-  for(i=0;i<streams;i++){
-    cudaMalloc(&d_zbut[i], sizeof(double)*st_leafmtxp->ktmax);
-  }
   cudaMemset(zau, 0.0, sizeof(double)*nd);
   nlf=st_leafmtxp->nlf;
   cudaMemset(d_zaut, 0.0, sizeof(double)*nd);
@@ -1146,16 +1179,16 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
     if(sttmp->ltmtx==1){
       kt=sttmp->kt;
       cuda_matvec_a1_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
-      cuda_matvec_a2_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+      //cuda_matvec_a2_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+      cuda_matvec_a2_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
     } else if(sttmp->ltmtx==2){
-      cuda_matvec_s_3_smo<128><<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1);
+      //cuda_matvec_s_3_smo<128><<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1);
+      cuda_matvec_s_3_smo<128><<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1);
     }
   }
   cudaThreadSynchronize();
   //for(i=0;i<streams;i++){cudaStreamSynchronize(s[i]);}
-  cuda_vadd<<<112,128>>>(zau,d_zaut,nd);
-  cudaFree(d_zaut);
-  for(i=0;i<streams;i++)cudaFree(d_zbut[i]); free(d_zbut);
+  //cuda_vadd<<<112,128>>>(zau,d_zaut,nd);
 }
 
 void c_hacapk_adot_cax_lfmtx_cuda_comm
@@ -2465,6 +2498,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
   double *d_mat;
   int len;
   cudaStream_t *s;
+  double *d_zaut, **d_zbut;
 
   double *d_zz, *d_b, *d_zr, *d_zshdw, *d_u, *d_wws, *d_zrnorm;
   double *d_zp, *d_zakp, *d_zkp, *d_znorm, *d_zden, *d_zt, *d_zkt, *d_zakt, *d_beta;
@@ -2515,8 +2549,13 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
   for(i=0;i<(*streams);i++){
     cudaStreamCreate(&s[i]);
   }
-  time_setmatrix = MPI_Wtime() - st_measure_time;
   //printf("c_hacapk_bicgstab_cax_lfmtx_cuda5_: %d streams created\n", streams);
+  cudaMalloc(&d_zaut, sizeof(double)*(*nd));
+  d_zbut = (double**)malloc(sizeof(double*)*(*streams));
+  for(i=0;i<(*streams);i++){
+    cudaMalloc(&d_zbut[i], sizeof(double)*st_leafmtxp->ktmax);
+  }
+  time_setmatrix = MPI_Wtime() - st_measure_time;
 
   time_spmv = 0.0;
   time_mpi = 0.0;
@@ -2543,10 +2582,10 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
   //c_hacapk_adot_body_lfmtx_cuda_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
   if(*opt==0){
     c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
-      (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams);
+      (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
   }else{
     c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
-      (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams);
+      (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
   }
   time_spmv += (MPI_Wtime()-tic);
   //c_hacapk_adot_cax_lfmtx_cuda_comm(zshdw, st_ctl, wws, wwr, isct, irct, *nd, &time_mpi);
@@ -2610,10 +2649,10 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
     //c_hacapk_adot_body_lfmtx_cuda_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
     if(*opt==0){
       c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
-	(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams);
+	(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
     }else{
       c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
-	(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams);
+	(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
     }
     time_spmv += (MPI_Wtime()-tic);
     /*
@@ -2665,10 +2704,10 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
     //c_hacapk_adot_body_lfmtx_cuda_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
     if(*opt==0){
       c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
-	(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams);
+	(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
     }else{
       c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
-	(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams);
+	(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
     }
     time_spmv += (MPI_Wtime()-tic);
     //c_hacapk_adot_cax_lfmtx_cuda_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
@@ -2747,8 +2786,8 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
     //printf( " End: %d, %.2e\n",mpinr,time );
     for(i=0;i<nrank;i++){
       if(i==mpinr){
-	char str[16];
-	if(*opt==0)snprintf(str,16,"C-CUDA5");else snprintf(str,16,"C-CUDA5a");
+	char str[32];
+	if(*opt==0)snprintf(str,32,"C-CUDA5(async)");else snprintf(str,32,"C-CUDA5a(async)");
 	printf( "%s  %d  BiCG        = %.5e\n", str, i, time );
 	printf( "%s  %d  time_mpi   = %.5e\n", str, i, time_mpi );
 	printf( "%s  %d  time_matvec  = %.5e\n", str, i, time_spmv );
@@ -2766,6 +2805,8 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
   for(i=0;i<(*streams);i++){
     cudaStreamDestroy(s[i]);
   }
+  cudaFree(d_zaut);
+  for(i=0;i<(*streams);i++)cudaFree(d_zbut[i]); free(d_zbut);
 
     // free cpu memory
     free(wws);
@@ -2812,16 +2853,8 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
   cublasStatus_t stat;
   cublasHandle_t handle;
   struct stc_cublasmatrices *scm;
-  stat = cublasCreate(&handle);
-  if(stat!=cudaSuccess){
-    printf("cublasCreate failed\n");
-    return;
-  }
-  scm = (struct stc_cublasmatrices*)malloc(sizeof(struct stc_cublasmatrices)*st_leafmtxp->nlf);
-  st_measure_time = MPI_Wtime();
-  int ret = myCublasSetMatrix(scm,st_leafmtxp);
-  if(ret!=0)return;
-  time_setmatrix = MPI_Wtime() - st_measure_time;
+  int ret;
+  double *d_zaut, *d_zbut;
 
   double *d_zz, *d_b, *d_zr, *d_zshdw, *d_u, *d_wws, *d_zrnorm;
   double *d_zp, *d_zakp, *d_zkp, *d_znorm, *d_zden, *d_zt, *d_zkt, *d_zakt, *d_beta;
@@ -2862,10 +2895,25 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
   // copy matrix to GPU
   //c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
 
+  st_measure_time = MPI_Wtime();
+
   len = getAllLength(st_leafmtxp);
   cudaMalloc(&d_mat, sizeof(double)*len);
   smo=(struct stc_matrixoffset *)malloc(sizeof(struct stc_matrixoffset)*st_leafmtxp->nlf);
   myCudaCopyAll(smo, st_leafmtxp, d_mat);
+
+  scm=(struct stc_cublasmatrices *)malloc(sizeof(struct stc_cublasmatrices)*st_leafmtxp->nlf);
+  myCublasMakeMatrix(st_leafmtxp, scm);
+  stat = cublasCreate(&handle);
+  if(stat!=cudaSuccess){
+    printf("cublasCreate failed\n");
+    return;
+  }
+  ret = myCublasSetMatrix(st_leafmtxp, scm);
+  if(ret!=0)return;
+  cudaMalloc(&d_zaut, sizeof(double)*(*nd));
+  cudaMalloc(&d_zbut, sizeof(double)*st_leafmtxp->ktmax);
+  time_setmatrix = MPI_Wtime() - st_measure_time;
 
   time_spmv = 0.0;
   time_mpi = 0.0;
@@ -2891,7 +2939,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
   //for(i=0;i<(*nd);i++)zshdw[i]=0.0;
   //c_hacapk_adot_body_lfmtx_cuda_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
   c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_cublas
-    (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, handle, scm);
+    (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, handle, scm, d_mat, d_zaut, d_zbut);
   /*
   {
     FILE *F;
@@ -2970,7 +3018,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
     tic = MPI_Wtime();
     //c_hacapk_adot_body_lfmtx_cuda_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
     c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_cublas
-      (d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, handle, scm);
+      (d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, handle, scm, d_mat, d_zaut, d_zbut);
     time_spmv += (MPI_Wtime()-tic);
     /*
       {
@@ -3020,7 +3068,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
     tic = MPI_Wtime();
     //c_hacapk_adot_body_lfmtx_cuda_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
     c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_cublas
-      (d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, handle, scm);
+      (d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, handle, scm, d_mat, d_zaut, d_zbut);
     time_spmv += (MPI_Wtime()-tic);
     //c_hacapk_adot_cax_lfmtx_cuda_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
     //
@@ -3098,20 +3146,25 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
     //printf( " End: %d, %.2e\n",mpinr,time );
     for(i=0;i<nrank;i++){
       if(i==mpinr){
-	printf( "C-CUDA6  %d  BiCG        = %.5e\n", i, time );
-	printf( "C-CUDA6  %d  time_mpi   = %.5e\n", i, time_mpi );
-	printf( "C-CUDA6  %d  time_matvec  = %.5e\n", i, time_spmv );
-	printf( "C-CUDA6  %d  >time_copy  = %.5e\n", i, time_copy );
-	printf( "C-CUDA6  %d  >time_set   = %.5e\n", i, time_set );
-	printf( "C-CUDA6  %d  >time_batch = %.5e\n", i, time_batch );
-	printf( "C-CUDA6  %d  time_setmatrix = %.5e\n", i, time_setmatrix );
+	char str[16];
+	strncpy(str, "C-CUDA6(CUBLAS)", 16);
+	printf( "%s  %d  BiCG        = %.5e\n", str, i, time );
+	printf( "%s  %d  time_mpi   = %.5e\n", str, i, time_mpi );
+	printf( "%s  %d  time_matvec  = %.5e\n", str, i, time_spmv );
+	printf( "%s  %d  >time_copy  = %.5e\n", str, i, time_copy );
+	printf( "%s  %d  >time_set   = %.5e\n", str, i, time_set );
+	printf( "%s  %d  >time_batch = %.5e\n", str, i, time_batch );
+	printf( "%s  %d  time_setmatrix = %.5e\n", str, i, time_setmatrix );
       }
       MPI_Barrier( icomm );
     }
   }
     // delete matrix
     //c_hacapk_adot_body_lfdel_batch_(st_leafmtxp);
-  cudaFree(d_mat);
+  cudaFree(d_zaut); cudaFree(d_zbut);
+  myCublasDestroyMatrix(smo,st_leafmtxp,scm);
+  free(scm);
+  free(smo);
   cublasDestroy(handle);
 
     // free cpu memory

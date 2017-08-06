@@ -615,7 +615,7 @@ contains
         write(6,*)
      endif
 #endif
-#if 0
+#if 1
 ! CUDA C+CUBLAS
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then

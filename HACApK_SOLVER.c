@@ -1511,7 +1511,7 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc_mkl
 	/**/
 	kt=sttmp->kt;
 	for(il=0;il<kt;il++)zbut[il]=0.0;
-	dgemv_("t", &ndt, &kt, &done, sttmp->a1, &ndt, &zu[nstrtt], &one, &done, zbut, &one);
+	dgemv_("t", &ndt, &kt, &done, sttmp->a1, &ndt, &zu[nstrtt-1], &one, &done, zbut, &one);
 	/*
 	for(il=0; il<kt; il++){
 	  //zbu[il]=0.0;
@@ -1522,7 +1522,7 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc_mkl
 	  }
 	}
 	*/
-	dgemv_("n", &ndl, &kt, &done, a2tmp, &ndl, zbut, &one, &done, &zaut[nstrtl], &one);
+	dgemv_("n", &ndl, &kt, &done, a2tmp, &ndl, zbut, &one, &done, &zaut[nstrtl-1], &one);
 	/*
 	for(il=0; il<kt; il++){
 	  for(it=0; it<ndl; it++){
@@ -1533,7 +1533,7 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc_mkl
 	}
 	*/
       } else if(sttmp->ltmtx==2){
-	dgemv_("t", &ndt, &ndl, &done, sttmp->a1, &ndt, &zu[nstrtt], &one, &done, &zaut[nstrtl], &one);
+	dgemv_("t", &ndt, &ndl, &done, sttmp->a1, &ndt, &zu[nstrtt-1], &one, &done, &zaut[nstrtl-1], &one);
 	/*
 	for(il=0; il<ndl; il++){
 	  ill=il+nstrtl-1; 
