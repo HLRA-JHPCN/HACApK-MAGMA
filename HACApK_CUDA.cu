@@ -1382,6 +1382,80 @@ __global__ void cuda_matvec_1kernel0
     }
   }
 }
+__global__ void cuda_matvec_1kernel0a
+(struct stc_1kernel_info info, struct stc_matrixoffsetd smd,
+ double *d_zaut, double *d_zu, double *d_mat, int nlf, int ktmax)
+{ // X blocks, 128 threads
+  int gid  = blockIdx.x;
+  int glen = gridDim.x;
+  int tid  = threadIdx.x;
+  int tlen = blockDim.x;
+  int ndl, ndt, nstrtl, nstrtt, ltmtx;
+  int wid  = threadIdx.x/32;
+  int wlen = 4;
+  int xid  = threadIdx.x%32;
+  int xlen = 32;
+  int ip, kt, il, it, itt, itl, ill, head;
+  double tmp;
+  extern __shared__ double tmpbut[];
+  ip = gid;
+  {
+    ndl = info.ndl[ip];
+    ndt = info.ndt[ip];
+    nstrtl = info.nstrtl[ip];
+    nstrtt = info.nstrtt[ip];
+    ltmtx = info.ltmtx[ip];
+    if(ltmtx==1){
+      kt = info.kt[ip];
+      //cuda_matvec_1k_a1(kt,ndt,nstrtt,d_zbut[ip/X],zu, d_mat, smo[ip].a1);
+      head = smd.a1[ip];
+      for(il=wid; il<kt; il+=wlen){
+	tmp = 0.0;
+	for(it=xid; it<ndt; it+=xlen){
+	  itt=it+nstrtt-1;
+	  itl=it+il*ndt; 
+	  tmp += d_mat[head+itl]*d_zu[itt];
+	}
+	for (int offset = warpSize/2; offset > 0; offset /= 2){
+	  tmp += __shfl_down(tmp, offset);
+	}
+	if(xid==0){
+	  tmpbut[il] = tmp;
+	}
+      }
+      __syncthreads();
+      //cuda_matvec_1k_a2(kt,ndl,nstrtl,zau,d_zbut[ip/X], d_mat, smo[ip].a2);
+      head = smd.a2[ip];
+      for(il=tid; il<ndl; il+=tlen){
+	tmp = 0.0;
+	ill = il+nstrtl-1;
+	for(it=0; it<kt; it++){
+	  itl = il+it*ndl;
+	  tmp += d_mat[head+itl]*tmpbut[it];
+	}
+	atomicAdd(&d_zaut[ill], tmp);
+      }
+    } else if(ltmtx==2){
+      //cuda_matvec_1k_s(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1);
+      head = smd.a1[ip];
+      for(il=wid; il<ndl; il+=wlen){
+	tmp = 0.0;
+	ill=il+nstrtl-1;
+	for(it=xid; it<ndt; it+=xlen){
+	  itt=it+nstrtt-1; 
+	  itl=it+il*ndt;
+	  tmp += d_mat[head+itl]*d_zu[itt];
+	}
+	for (int offset = warpSize/2; offset > 0; offset /= 2){
+	  tmp += __shfl_down(tmp, offset);
+	}
+	if(xid==0){
+	  atomicAdd(&d_zaut[ill], tmp);
+	}
+      }
+    }
+  }
+}
 __global__ void cuda_matvec_1kernel
 (struct stc_1kernel_info info, struct stc_matrixoffsetd smd,
  double *d_zaut, double *d_zu, double *d_mat, int nlf, int ktmax)
@@ -1475,6 +1549,9 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_1kernel
   cudaMemset(zau, 0.0, sizeof(double)*nd);
   if(nblocks==0){
     cuda_matvec_1kernel0<<<st_leafmtxp->nlf,128,st_leafmtxp->ktmax*sizeof(double)>>>
+      (info, smd, zau, zu, d_mat, st_leafmtxp->nlf, st_leafmtxp->ktmax);
+  }else if(nblocks<0){
+    cuda_matvec_1kernel0a<<<st_leafmtxp->nlf,128,st_leafmtxp->ktmax*sizeof(double)>>>
       (info, smd, zau, zu, d_mat, st_leafmtxp->nlf, st_leafmtxp->ktmax);
   }else{
     cuda_matvec_1kernel<<<nblocks,128,st_leafmtxp->ktmax*sizeof(double)>>>

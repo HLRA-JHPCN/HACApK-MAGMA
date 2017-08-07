@@ -632,7 +632,7 @@ contains
         write(6,*)
      endif
 #endif
-#if 1
+#if 0
 ! CUDA C 1kernel 112
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -663,6 +663,23 @@ contains
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
         write(6,2000) ' time_c_HACApK CUDA7(1kernel-0) =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! CUDA C 1kernel -1(0a)
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA7(1kernel-0a) begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda7(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,-1)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA7(1kernel-0a) =',time_bicgstab
         write(6,*)
      endif
 #endif
