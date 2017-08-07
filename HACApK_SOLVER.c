@@ -458,11 +458,12 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 	for(i=0;i<nrank;i++){
 	  if(i==mpinr){
 		printf( "C-SEQ  %d BiCG        = %.5e\n", i, time );
-		printf( "C-SEQ  %d time_mpi   = %.5e\n", i, time_mpi );
-		printf( "C-SEQ  %d time_matvec  = %.5e\n", i, time_spmv );
+		printf( "C-SEQ  %d time_mpi    = %.5e\n", i, time_mpi );
+		printf( "C-SEQ  %d time_matvec = %.5e\n", i, time_spmv );
 		printf( "C-SEQ  %d >time_copy  = %.5e\n", i, time_copy );
 		printf( "C-SEQ  %d >time_set   = %.5e\n", i, time_set );
 		printf( "C-SEQ  %d >time_batch = %.5e\n", i, time_batch );
+		printf( "C-SEQ  %d iteration   = %d\n", i, step );
 	  }
 	  MPI_Barrier( icomm );
 	}
@@ -934,11 +935,12 @@ void c_hacapk_adot_body_lfdel_magma
 	for(i=0;i<nrank;i++){
 	  if (mpinr == i) {
 		printf( "C-MAGMA %d   BiCG        = %.5e\n", i, time );
-		printf( "C-MAGMA %d   time_mpi   = %.5e\n", i, time_mpi );
-		printf( "C-MAGMA %d   time_matvec  = %.5e\n", i, time_spmv );
+		printf( "C-MAGMA %d   time_mpi    = %.5e\n", i, time_mpi );
+		printf( "C-MAGMA %d   time_matvec = %.5e\n", i, time_spmv );
 		printf( "C-MAGMA %d   >time_copy  = %.5e\n", i, time_copy );
 		printf( "C-MAGMA %d   >time_set   = %.5e\n", i, time_set );
 		printf( "C-MAGMA %d   >time_batch = %.5e\n", i, time_batch );
+		printf( "C-MAGMA %d   iteration   = %d\n", i, step );
 	  }
 	  MPI_Barrier( icomm );
 	}
@@ -1432,11 +1434,12 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
       for(i=0;i<nrank;i++){
 	if(i==mpinr){
 	  printf( "%s  %d  BiCG        = %.5e\n", str, i, time );
-	  printf( "%s  %d  time_mpi   = %.5e\n", str, i, time_mpi );
-	  printf( "%s  %d  time_matvec  = %.5e\n", str, i, time_spmv );
+	  printf( "%s  %d  time_mpi    = %.5e\n", str, i, time_mpi );
+	  printf( "%s  %d  time_matvec = %.5e\n", str, i, time_spmv );
 	  printf( "%s  %d  >time_copy  = %.5e\n", str, i, time_copy );
 	  printf( "%s  %d  >time_set   = %.5e\n", str, i, time_set );
 	  printf( "%s  %d  >time_batch = %.5e\n", str, i, time_batch );
+	  printf( "%s  %d  iteration   = %d\n", str, i, step );
 	}
 	MPI_Barrier( icomm );
       }
@@ -1778,11 +1781,12 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
 	  for(i=0;i<nrank;i++){
 		if(i==mpinr){
 			printf( "C-OMP+MKL  %d  BiCG        = %.5e\n", i, time );
-			printf( "C-OMP+MKL  %d  time_mpi   = %.5e\n", i, time_mpi );
-			printf( "C-OMP+MKL  %d  time_matvec  = %.5e\n", i, time_spmv );
+			printf( "C-OMP+MKL  %d  time_mpi    = %.5e\n", i, time_mpi );
+			printf( "C-OMP+MKL  %d  time_matvec = %.5e\n", i, time_spmv );
 			printf( "C-OMP+MKL  %d  >time_copy  = %.5e\n", i, time_copy );
 			printf( "C-OMP+MKL  %d  >time_set   = %.5e\n", i, time_set );
 			printf( "C-OMP+MKL  %d  >time_batch = %.5e\n", i, time_batch );
+			printf( "C-OMP+MKL  %d  iteration   = %d\n", i, step );
 		}
 		MPI_Barrier( icomm );
 	  }
@@ -1938,11 +1942,12 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 	  for(i=0;i<nrank;i++){
         if (i==mpinr) {
 		  printf( "C-FLAT  %d   BiCG        = %.5e\n", i, time );
-		  printf( "C-FLAT  %d   time_mpi   = %.5e\n", i, time_mpi );
-		  printf( "C-FLAT  %d   time_matvec  = %.5e\n", i, time_spmv );
+		  printf( "C-FLAT  %d   time_mpi    = %.5e\n", i, time_mpi );
+		  printf( "C-FLAT  %d   time_matvec = %.5e\n", i, time_spmv );
 		  printf( "C-FLAT  %d   >time_copy  = %.5e\n", i, time_copy );
 		  printf( "C-FLAT  %d   >time_set   = %.5e\n", i, time_set );
 		  printf( "C-FLAT  %d   >time_batch = %.5e\n", i, time_batch );
+		  printf( "C-FLAT  %d   iteration   = %d\n", i, step );
         }
 		MPI_Barrier( icomm );
 	  }
@@ -2138,12 +2143,13 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
         //printf( " End: %d, %.2e\n",mpinr,time );
       for(i=0;i<nrank;i++){
         if (mpinr == i) {
-		  printf( "C-ALL   %d  BiCG        = %.5e\n", i, time );
-		  printf( "C-ALL   %d  time_mpi   = %.5e\n", i, time_mpi );
-		  printf( "C-ALL   %d  time_copy  = %.5e\n", i, time_copy );
-		  printf( "C-ALL   %d  time_spmv  = %.5e\n", i, time_spmv );
-		  printf( "C-ALL   %d  > time_batch = %.5e\n", i, time_batch );
-		  printf( "C-ALL   %d  > time_set   = %.5e\n", i, time_set );
+		  printf( "C-ALL   %d  BiCG         = %.5e\n", i, time );
+		  printf( "C-ALL   %d  time_mpi     = %.5e\n", i, time_mpi );
+		  printf( "C-ALL   %d  time_copy    = %.5e\n", i, time_copy );
+		  printf( "C-ALL   %d  time_spmv    = %.5e\n", i, time_spmv );
+		  printf( "C-ALL   %d  >time_batch  = %.5e\n", i, time_batch );
+		  printf( "C-ALL   %d  >time_set    = %.5e\n", i, time_set );
+		  printf( "C-ALL   %d  iteration    = %d\n", i, step );
         }
 		MPI_Barrier( icomm );
       }
@@ -2390,13 +2396,14 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 	  for(i=0;i<nrank;i++){
         if (mpinr == i) {
 		  printf( "  %d    BiCG        = %.5e\n", i, time );
-		  printf( "  %d    time_mpi   = %.5e\n", i, time_mpi );
-		  printf( "  %d    time_copy  = %.5e\n", i, time_copy );
-		  printf( "  %d    time_spmv  = %.5e\n", i, time_spmv );
-		  printf( "  %d    > time_batch = %.5e\n", i, time_batch );
-		  printf( "  %d    > time_set   = %.5e\n", i, time_set );
-		  printf( "  %d    + time_set2 = %.5e\n", i, time_set2 );
-		  printf( "  %d    + time_set3 = %.5e\n", i, time_set3 );
+		  printf( "  %d    time_mpi    = %.5e\n", i, time_mpi );
+		  printf( "  %d    time_copy   = %.5e\n", i, time_copy );
+		  printf( "  %d    time_spmv   = %.5e\n", i, time_spmv );
+		  printf( "  %d    >time_batch = %.5e\n", i, time_batch );
+		  printf( "  %d    >time_set   = %.5e\n", i, time_set );
+		  printf( "  %d    +time_set2  = %.5e\n", i, time_set2 );
+		  printf( "  %d    +time_set3  = %.5e\n", i, time_set3 );
+		  printf( "  %d    iteration   = %d\n", i, step );
         }
 		MPI_Barrier( icomm );
 	  }
@@ -2693,14 +2700,15 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         //printf( " End: %d, %.2e\n",mpinr,time );
 	  for(i=0;i<nrank;i++){
         if (mpinr == i) {
-		  printf( " %d     BiCG       = %.5e\n", i, time );
-		  printf( " %d     time_mpi  = %.5e\n", i, time_mpi );
-		  printf( " %d     time_copy = %.5e\n", i, time_copy );
-		  printf( " %d     time_spmv = %.5e\n", i, time_spmv );
-		  printf( " %d     > time_batch = %.5e\n", i, time_batch );
-		  printf( " %d     > time_set   = %.5e\n", i, time_set );
-		  printf( " %d       + time_set2 = %.5e\n", i, time_set2 );
-		  printf( " %d       + time_set3 = %.5e\n", i, time_set3 );
+		  printf( " %d     BiCG         = %.5e\n", i, time );
+		  printf( " %d     time_mpi     = %.5e\n", i, time_mpi );
+		  printf( " %d     time_copy    = %.5e\n", i, time_copy );
+		  printf( " %d     time_spmv    = %.5e\n", i, time_spmv );
+		  printf( " %d     >time_batch  = %.5e\n", i, time_batch );
+		  printf( " %d     >time_set    = %.5e\n", i, time_set );
+		  printf( " %d       +time_set2 = %.5e\n", i, time_set2 );
+		  printf( " %d       +time_set3 = %.5e\n", i, time_set3 );
+		  printf( " %d       iteration  = %d\n", i, step );
         }
 		MPI_Barrier( icomm );
 	  }
@@ -2980,11 +2988,12 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 	  for(i=0;i<nrank;i++){
 	    if (mpinr == i) {
 	      printf( "   %d    BiCG        = %.5e\n", i, time );
-	      printf( "   %d    time_mpi   = %.5e\n", i, time_mpi );
-	      printf( "   %d    time_copy  = %.5e\n", i, time_copy );
-	      printf( "   %d    time_spmv  = %.5e\n", i, time_spmv );
-	      printf( "   %d    > time_batch = %.5e\n", i, time_batch );
-	      printf( "   %d    > time_set   = %.5e\n", i, time_set );
+	      printf( "   %d    time_mpi    = %.5e\n", i, time_mpi );
+	      printf( "   %d    time_copy   = %.5e\n", i, time_copy );
+	      printf( "   %d    time_spmv   = %.5e\n", i, time_spmv );
+	      printf( "   %d    >time_batch = %.5e\n", i, time_batch );
+	      printf( "   %d    >time_set   = %.5e\n", i, time_set );
+	      printf( "   %d    iteration   = %d\n", i, step );
 	    }
 	    MPI_Barrier( icomm );
 	  }

@@ -361,7 +361,7 @@ contains
 ! allocate/copy to GPU, if have not done it.
      call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
 #endif
-#if 0
+#if 1
 ! only MATVEC on GPU (magma, batched, ?)
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -378,7 +378,7 @@ contains
        write(6,*) 
      endif
 #endif
-#if 0
+#if 1
 ! a simpler "flat" version.
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -629,6 +629,40 @@ contains
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
         write(6,2000) ' time_c_HACApK CUDA6 =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! CUDA C 1kernel 112
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA7(1kernel-112) begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda7(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,112)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA7(1kernel-112) =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! CUDA C 1kernel 0
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA7(1kernel-0) begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda7(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,0)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA7(1kernel-0) =',time_bicgstab
         write(6,*)
      endif
 #endif
