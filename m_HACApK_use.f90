@@ -572,7 +572,7 @@ contains
      endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,32,0)
+     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,32,0,0)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
@@ -589,7 +589,7 @@ contains
      endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,st_leafmtxp%nlf)
+     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,st_leafmtxp%nlf,0,0)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
@@ -599,19 +599,36 @@ contains
      endif
 #endif
 #if 1
-! CUDA C, ASYNC2
+! CUDA C, ASYNC2 (1block)
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
-        write(*,*)"HACApK_c CUDA5a(ASYNC2) begin"
+        write(*,*)"HACApK_c CUDA5a(ASYNC2(1block)) begin"
      endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,32,1)
+     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,32,1,0)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
-        write(6,2000) ' time_c_HACApK CUDA5a =',time_bicgstab
+        write(6,2000) ' time_c_HACApK CUDA5(ASYNC2(1block)) =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! CUDA C, ASYNC2 (1block-merge)
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c CUDA5a(ASYNC2(1block-merge)) begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_cuda5(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,32,1,1)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK CUDA5(ASYNC2(1block-merge)) =',time_bicgstab
         write(6,*)
      endif
 #endif
