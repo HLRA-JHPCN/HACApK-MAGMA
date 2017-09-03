@@ -284,7 +284,7 @@ endif
 1000  continue
 
 #ifdef USE_SUBCOMM
-  call MPI_Comm_free( comm, ierr )^M
+  call MPI_Comm_free( comm, ierr )
 #endif
   if(allocated(st_ppohBEM_np))         deallocate(st_ppohBEM_np)
   if(allocated(ppohBEM_face2node))     deallocate(ppohBEM_face2node)
