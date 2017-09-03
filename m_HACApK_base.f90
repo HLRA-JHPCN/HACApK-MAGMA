@@ -283,12 +283,8 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  type(st_HACApK_calc_entry) :: st_bemv
  type(st_HACApK_lcontrol) :: st_ctl
  integer,optional :: icomma
+ integer grank
  character*320 logfile
-#ifdef HAVE_PaRSEC_SUBCOMM
- integer my_rank(1)  ! MPI_Comm
- integer my_comm     ! MPI_Comm
- integer my_group    ! MPI_Group
-#endif
  allocate(st_ctl%param(100))
  st_ctl%param(1:100)=0.0
  st_ctl%param(1) =1;        ! Print : 0:Only Error 1:STD 2:Dubug
@@ -331,6 +327,10 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  endif
  allocate(st_ctl%lpmd(30)); st_ctl%lpmd(:)=0
  st_ctl%lpmd(1)=icomm; st_ctl%lpmd(2)=nrank; st_ctl%lpmd(3)=irank; st_ctl%lpmd(4)=20
+ !
+ call MPI_Comm_rank ( MPI_COMM_WORLD, grank, ierr )
+ st_ctl%lpmd(30)=grank
+ !
 #ifdef HAVE_PaRSEC
   st_ctl%param(21)=200;       ! cluster : leaf size 15
   if( irank .eq. 0 ) then
@@ -338,17 +338,6 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
     print*, '!!! cluster leaf size is increased to 200 !!!'
     print*, ' '
   endif
-#ifdef HAVE_PaRSEC_SUBCOMM
-  my_rank(1) = irank
-  call MPI_Comm_group(MPI_COMM_WORLD, world_group, ierr);
-  call MPI_Group_incl(world_group, 1, my_rank, my_group, ierr);
-  call MPI_Comm_create(MPI_COMM_WORLD, my_group, my_comm, ierr);
-  call MPI_Group_free(world_group, ierr);
-  call MPI_Group_free(my_group, ierr);
-  st_ctl%lpmd(1)=my_comm;
-  st_ctl%lpmd(2)=1;
-  st_ctl%lpmd(3)=0;
-#endif
 #endif
 !  nthr = omp_get_num_threads()
  nthr = 1
@@ -423,7 +412,7 @@ endfunction
 !!!!!!!!!!!!!!!!!! start clustering !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  nsrt=1; ndf=nofc; nclst=0; ndpth=0; ndscd=0
  call HACApK_generate_cbitree(st_clt,gmid,param,lpmd,lodfc,ndpth,ndscd,nsrt,ndf,nofc,ndim,nclst)
- if(st_ctl%param(1)>0 .and. mpinr==0) write(*,1000) 'No. of cluster=',nclst
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) write(*,1000) 'No. of cluster=',nclst
  if(st_ctl%param(1)>0)  write(mpilog,1000) 'No. of cluster=',nclst
 
  call HACApK_bndbox(st_clt,gmid,lodfc,nofc)
@@ -432,17 +421,17 @@ endfunction
 !!!!!!!!!!!!!!!!!! start construction of H-matrix  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ndpth=0; lnmtx(1:3)=0
  call HACApK_count_lntmx(st_clt,st_clt,param,lpmd,lnmtx,nofc,nffc)
- if(st_ctl%param(1)>0 .and. mpinr==0) print*,'No. of nsmtx',lnmtx(1:3)
- if(st_ctl%param(1)>0 .and. mpinr==0) print*,'   1:Rk-matrix 2: dense-mat 3:H-matrix'
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) print*,'No. of nsmtx',lnmtx(1:3)
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) print*,'   1:Rk-matrix 2: dense-mat 3:H-matrix'
  st_leafmtxp%nlfkt=lnmtx(1)
  nlf=lnmtx(1)+lnmtx(2)
  allocate(st_leafmtx(nlf))
  st_leafmtxp%nlf=nlf; nlf=0
  
  call HACApK_generate_leafmtx(st_leafmtx,st_clt,st_clt,param,lpmd,lnmtx,nofc,nffc,nlf)
- if(st_ctl%param(1)>1 .and. mpinr==0) print*,'HACApK_generate_frame_leafmtx; HACApK_generate_leafmtx end'
+ if(st_ctl%param(1)>1 .and. st_ctl%lpmd(30)==0) print*,'HACApK_generate_frame_leafmtx; HACApK_generate_leafmtx end'
  call HACApK_qsort_row_leafmtx(st_leafmtx,1,nlf)
- if(st_ctl%param(1)>1 .and. mpinr==0) print*,'HACApK_generate_frame_leafmtx; HACApK_qsort_row_leafmtx end'
+ if(st_ctl%param(1)>1 .and. st_ctl%lpmd(30)==0) print*,'HACApK_generate_frame_leafmtx; HACApK_qsort_row_leafmtx end'
  ilp=1; ips=1
  do ip=1,nlf
    il=st_leafmtx(ip)%nstrtl
@@ -1153,11 +1142,11 @@ endfunction
  call MPI_reduce( znn, znnmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX,0, icomm, ierr );
  call MPI_reduce( znn, znnmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN,0, icomm, ierr );
  call MPI_reduce( znn, znnall, 1, MPI_DOUBLE_PRECISION, MPI_SUM,0, icomm, ierr );
- if(st_ctl%param(1)>0 .and. mpinr==0) write(*,*) 'Memory of the H-matrix=',znnall,'(Mbyte)'
- if(st_ctl%param(1)>0 .and. mpinr==0) write(*,*) 'Memory compression v.s. dense matrix=',znnall/znndense*100,'(%)'
- if(st_ctl%param(1)>0 .and. mpinr==0) write(*,*) 'Maximun memory of sub-matrices for a MPI=',znnmax,'(Mbyte)'
- if(st_ctl%param(1)>0 .and. mpinr==0) write(*,*) 'Minimun memory of sub-matrices for a MPI=',znnmin,'(Mbyte)'
- if(st_ctl%param(1)>0 .and. mpinr==0) write(*,*) 'Minimun memory/Maximun memory=',znnmin/znnmax
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) write(*,*) 'Memory of the H-matrix=',znnall,'(Mbyte)'
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) write(*,*) 'Memory compression v.s. dense matrix=',znnall/znndense*100,'(%)'
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) write(*,*) 'Maximun memory of sub-matrices for a MPI=',znnmax,'(Mbyte)'
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) write(*,*) 'Minimun memory of sub-matrices for a MPI=',znnmin,'(Mbyte)'
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) write(*,*) 'Minimun memory/Maximun memory=',znnmin/znnmax
  
  end subroutine HACApK_chk_leafmtx
  

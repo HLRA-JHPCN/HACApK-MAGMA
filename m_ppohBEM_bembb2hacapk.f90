@@ -105,7 +105,7 @@ contains
     zgmid(il,2) = (np(n1)%y+np(n2)%y+np(n3)%y)/3.0d0
     zgmid(il,3) = (np(n1)%z+np(n2)%z+np(n3)%z)/3.0d0
 !***************************************************
-    if (mpinr == 0 .and. il == 1) then
+    if (st_ctl%lpmd(30) == 0 .and. il == 1) then
       write(*,*)
       write(*,*) ' ** set up rhs **'
       write(*,*)

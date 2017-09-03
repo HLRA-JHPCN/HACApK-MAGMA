@@ -1,3 +1,6 @@
+
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
+
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<time.h>
@@ -828,5 +831,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     magma_free_cpu(h_inc);
     free(saved_sz);
 }
+
+#endif
 
 #endif

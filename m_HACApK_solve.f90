@@ -465,7 +465,7 @@ end subroutine HACApK_bicgstab_cax_lfmtx_hyp
  mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1)
    call MPI_Barrier( icomm, ierr )
    st_measure_time=MPI_Wtime()
- if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_bicgstab_lfmtx_hyp start'
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) print*,'HACApK_bicgstab_lfmtx_hyp start'
  mstep=param(83)
  eps=param(91)
  allocate(wws(maxval(lnp(0:nrank-1))),wwr(maxval(lnp(0:nrank-1))))
@@ -477,7 +477,7 @@ end subroutine HACApK_bicgstab_cax_lfmtx_hyp
  call HACApK_adotsub_lfmtx_hyp(zr,zshdw,st_leafmtxp,st_ctl,u,wws,wwr,isct,irct,nd)
  zshdw(:nd)=zr(:nd)
  zrnorm=HACApK_dotp_d(nd,zr,zr); zrnorm=dsqrt(zrnorm)
- if(mpinr==0) print*,'Original relative residual norm =',zrnorm/bnorm
+ if(st_ctl%lpmd(30)==0) print*,'Original relative residual norm =',zrnorm/bnorm
  do in=1,mstep
    if(zrnorm/bnorm<eps) exit
    zp(:nd) =zr(:nd)+beta*(zp(:nd)-zeta*zakp(:nd))
@@ -498,7 +498,7 @@ end subroutine HACApK_bicgstab_cax_lfmtx_hyp
    call MPI_Barrier( icomm, ierr )
    en_measure_time=MPI_Wtime()
    time = en_measure_time - st_measure_time
-   if(st_ctl%param(1)>0 .and. mpinr==0) print*,in,time,log10(zrnorm/bnorm)
+   if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) print*,in,time,log10(zrnorm/bnorm)
  enddo
 end subroutine HACApK_bicgstab_lfmtx_hyp
 
@@ -648,7 +648,8 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
     endif
    endif
  enddo
-    
+  
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)  
 !!!
  call MPI_Comm_rank ( icomm, st_leafmtxp%mpi_rank, ierr )
 !!!
@@ -734,13 +735,14 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
    endif
 #endif
 #endif
-!
-#ifdef HAVE_PaRSEC
-   call c_HACApK_PaRSEC(1,1,u,st_leafmtxp,b,wws)
-#endif
  enddo
  if (st_leafmtxp%mpi_rank == 0) print*,'c_HACApK_adot_body_lfmtx end'
  deallocate(wws)
+#endif // #if defined(HAVE_MAGMA | HAVE_MAGMA_BATCH)
+!
+#ifdef HAVE_PaRSEC
+ call c_HACApK_PaRSEC(1,1,u,st_leafmtxp,b,wws)
+#endif
 end subroutine HACApK_measurez_time_ax_FPGA_lfmtx
 !
 !
@@ -843,6 +845,7 @@ end function HACApK_adot_pmt_lfmtx_p
 end function HACApK_adot_pmt_lfmtx_hyp
 !
 !
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)  
 !***HACApK_bicgstab_cax_lfmtx_flat
  subroutine HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn) bind(C)
  use, intrinsic ::  iso_c_binding
@@ -958,6 +961,7 @@ end function HACApK_adot_pmt_lfmtx_hyp
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_set   =',time_set
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) '        > time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_flat
+#endif
 ! 
 !***HACApK_adot_cax_lfmtx_comm
  subroutine HACApK_adot_cax_lfmtx_comm(zau,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)

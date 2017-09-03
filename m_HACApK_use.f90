@@ -98,13 +98,14 @@ contains
  
  call HACApK_chk_st_ctl(st_ctl)
  
- if(st_ctl%param(1)>0 .and. mpinr==0) print*,'***************** HACApK start ********************'
+ ! st_ctl%lpmd(30) is global rank
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) print*,'***************** HACApK start ********************'
  if(st_ctl%param(1)>0)  write(mpilog,1000) 'irank=',mpinr,', nrank=',nrank
  nd=nofc*nffc
- if(st_ctl%param(1)>0 .and. mpinr==0) write(*,1000) 'nd=',nd,' nofc=',nofc,' nffc=',nffc
- if(st_ctl%param(1)>0 .and. mpinr==0) write(*,1000) 'nrank=',nrank,' nth=',nthr
- if(st_ctl%param(1)>1 .and. mpinr==0) print*,'param:'
- if(st_ctl%param(1)>1 .and. mpinr==0) write(*,10000) st_ctl%param(1:100)
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) write(*,1000) 'nd=',nd,' nofc=',nofc,' nffc=',nffc
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) write(*,1000) 'nrank=',nrank,' nth=',nthr
+ if(st_ctl%param(1)>1 .and. st_ctl%lpmd(30)==0) print*,'param:'
+ if(st_ctl%param(1)>1 .and. st_ctl%lpmd(30)==0) write(*,10000) st_ctl%param(1:100)
  10000 format(10(1pe10.3)/)
  allocate(lnmtx(3))
  call MPI_Barrier( icomm, ierr )
@@ -245,8 +246,8 @@ contains
 !   call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
 #endif
    time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
-   if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000)              'time_HACApK_solve  =',time_bicgstab
-   if(st_ctl%param(1)>0 .and. mpinr==0 .and. nstp>0)  write(6,2000) '       time_1step  =',time_bicgstab/nstp
+   if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0)  write(6,2000)              'time_HACApK_solve  =',time_bicgstab
+   if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0 .and. nstp>0)  write(6,2000) '       time_1step  =',time_bicgstab/nstp
    allocate(www(nd))
    sol(:nd)=0.0d0; www(lod(:nd))=u(:nd); sol(:nd)=www(:nd)
    deallocate(www)
@@ -276,11 +277,10 @@ contains
  lpmd => st_ctl%lpmd(:); lnp(0:) => st_ctl%lnp; lsp(0:) => st_ctl%lsp;lthr(0:) => st_ctl%lthr;lod => st_ctl%lod(:); param=>st_ctl%param(:)
  mpinr=lpmd(3); mpilog=lpmd(4); nrank=lpmd(2); icomm=lpmd(1); 
  param(91)=ztol
- if(st_ctl%param(1)>0 .and. mpinr==0) print*,'HACApK_solve_cx start'
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0) print*,'HACApK_solve_cx start'
  nofc=st_bemv%nd;nffc=1;ndim=3
  nd=nofc*nffc
 
- if(st_ctl%param(1)>1) write(*,*) 'irank=',mpinr
  allocate(u(nd),b(nd),u_copy(nd)); 
  u(:nd)=sol(lod(:nd)); b(:nd)=rhs(lod(:nd))
  if(param(61)==3)then
@@ -314,6 +314,7 @@ contains
      st_ctl%lsp_offset = loc(st_ctl%lsp(:))-loc(st_ctl%param(:))
      st_ctl%lnp_offset = loc(st_ctl%lnp(:))-loc(st_ctl%param(:))
 
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 #if defined(BICG_MAGMA_MGPU)
 !
 ! > multi-GPU/proc version <
@@ -431,6 +432,7 @@ contains
      endif
 #endif
      u(:nd) = u_copy(:nd)
+#endif
 #endif
 
    elseif(param(85)==2)then

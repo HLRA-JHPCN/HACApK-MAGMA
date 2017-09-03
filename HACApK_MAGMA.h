@@ -104,14 +104,12 @@ typedef struct stc_HACApK_lcontrol {
 } stc_HACApK_lcontrol;
 
 
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 #define num_streams 1
 #define max(a,b) (((a) > (b) ? (a) : (b)))
 #define min(a,b) (((a) < (b) ? (a) : (b)))
 
-//#define batch_count 1
-//#define batch_count 10000
 #define batch_count 5000
-//#define batch_count 2
 #define batch_pad 32
 #define MAGMA_BATCH_DGEMV_ATOMIC
 #define BATCH_IN_PLACE_Y // this is needed with c_hacapk_adot_body_lfcpy_batch_sorted_
@@ -157,3 +155,4 @@ void hacapk_sort(int n, int *sizes);
 static int get_device_id(stc_HACApK_leafmtxp *st_leafmtxp) {
     return (st_leafmtxp->mpi_rank)%procs_per_node;
 }
+#endif
