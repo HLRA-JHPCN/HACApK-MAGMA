@@ -330,10 +330,11 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  st_ctl%lpmd(30)=grank
  !
 #ifdef HAVE_PaRSEC
-  st_ctl%param(21)=200;       ! cluster : leaf size 15
-  if( irank .eq. 0 ) then
+  !st_ctl%param(21)=ceiling(dsqrt(20.0*dble(nd)));       ! cluster : leaf size 15
+  st_ctl%param(21)=200;
+  if( grank .eq. 0 ) then
     print*, ' '
-    print*, '!!! cluster leaf size is increased to 200 !!!'
+    print*, '!!! cluster leaf size is increased to',st_ctl%param(21)
     print*, ' '
   endif
 #endif

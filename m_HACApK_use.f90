@@ -55,7 +55,7 @@ contains
  st_measure_time_ax=MPI_Wtime()
  call HACApK_measurez_time_ax_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
  en_measure_time_ax=MPI_Wtime()
- if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2000) 'lfmtx; time_AX_once  =',(en_measure_time_ax - st_measure_time_ax)/st_ctl%param(99)
+ if(st_ctl%param(1)>0 .and. st_ctl%lpmd(30)==0)  write(6,2000) 'lfmtx; time_AX_once  =',(en_measure_time_ax - st_measure_time_ax)/st_ctl%param(99)
 !
 #if defined(HAVE_MAGMA) & !defined(MAGMA_INIT_PER)
  call magma_init()
@@ -65,10 +65,10 @@ contains
  call HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,st_bemv%nd,nstp,lrtrn)
  en_measure_time_ax=MPI_Wtime()
 !
- call MPI_Barrier( icomm, ierr )
+#if !defined(HAVE_PaRSEC)
  sol(:)=0.0d0
  lrtrn=HACApK_solve_cax(st_leafmtxp,st_bemv,st_ctl,rhs,sol,ztol)
- call MPI_Barrier( icomm, ierr )
+#endif
 !
 #if defined(HAVE_MAGMA) & !defined(MAGMA_INIT_PER)
  call magma_finalize()

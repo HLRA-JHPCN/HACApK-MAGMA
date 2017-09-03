@@ -692,8 +692,8 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
    enddo
    call MPI_Allreduce( enorm, enorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
    call MPI_Allreduce( unorm, unorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
-   enorm_g = sqrt(enorm_g)
-   unorm_g = sqrt(unorm_g)
+   enorm_g = dsqrt(enorm_g)
+   unorm_g = dsqrt(unorm_g)
    rnorm_g = enorm_g / unorm_g
    if (st_leafmtxp%mpi_rank == 0) then
        ErrFormat = "(A16, ES10.3, A3, ES10.3, A3, ES10.3)"
@@ -725,8 +725,8 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
    enddo
    call MPI_Allreduce( enorm, enorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
    call MPI_Allreduce( unorm, unorm_g, 1, MPI_DOUBLE_PRECISION, MPI_SUM, icomm, ierr )
-   enorm_g = sqrt(enorm_g)
-   unorm_g = sqrt(unorm_g)
+   enorm_g = dsqrt(enorm_g)
+   unorm_g = dsqrt(unorm_g)
    rnorm_g = enorm_g / unorm_g
    if (st_leafmtxp%mpi_rank == 0) then
        ErrFormat = "(A16, ES10.3, A3, ES10.3, A3, ES10.3)"
@@ -741,6 +741,8 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
 #endif // #if defined(HAVE_MAGMA | HAVE_MAGMA_BATCH)
 !
 #ifdef HAVE_PaRSEC
+ allocate(u(nd),b(nd),wws(nd))
+ u(:)=1.0; b(:)=1.0
  call c_HACApK_PaRSEC(1,1,u,st_leafmtxp,b,wws)
 #endif
 end subroutine HACApK_measurez_time_ax_FPGA_lfmtx
