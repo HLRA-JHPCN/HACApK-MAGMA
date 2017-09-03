@@ -195,6 +195,7 @@ module m_HACApK_base
     type(c_ptr) :: max_N_mgpu
     type(c_ptr) :: nlf_mgpu
     type(c_ptr) :: num_batch_mgpu
+    type(c_ptr) :: total_size_y_mgpu
 #else
     real*8,   pointer :: d_A_mgpu
     real*8,   pointer :: d_X_mgpu
@@ -219,6 +220,7 @@ module m_HACApK_base
     integer*4,pointer :: max_N_mgpu
     integer*4,pointer :: nlf_mgpu
     integer*4,pointer :: num_batch_mgpu
+    integer*4,pointer :: total_size_y_mgpu
 #endif
     !integer mpi_comm
     integer mpi_rank
