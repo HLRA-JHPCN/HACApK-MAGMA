@@ -24,7 +24,7 @@ int hacapk_size_sorter(const void* arg1,const void* arg2) {
   const int *val1 = (const int*)arg1;
   const int *val2 = (const int*)arg2;
 
-  #define BY_GROUP
+  //#define BY_GROUP
   #if defined(BY_GROUP)
   // sort by n "group", whithin group, sort by m
   return (val2[3] == val1[3] ? (val2[1] < val1[1]) : val2[3] < val1[3]);
@@ -329,6 +329,18 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     if (st_leafmtxp->mpi_rank == 0) {
         printf( "\n\n ++ num_batch=%d (this include num_streamed), num_streamed=%d,%d ++\n\n",num_batch,num_streamed,num_streamed_t );
     }
+    #define OUTPUT_SIZES
+    #ifdef OUTPUT_SIZES
+    FILE *fp;
+    char filename[100];
+    sprintf(filename,"sizes_%d.dat",st_leafmtxp->mpi_rank);
+    fp = fopen(filename,"w");
+    fprintf(fp, "%d\n",num_batch);
+    for (ip = 0; ip < num_batch; ip++) {
+        fprintf(fp, "%d %d %d\n",sizes[sort_array_size*ip + 0],sizes[sort_array_size*ip + 1],sizes[sort_array_size*ip + 2]);
+    }
+    fclose(fp);
+    #endif
 
     #if defined(SORT_BATCH_BY_SIZES)
     #if defined(USE_QSORT)
@@ -341,9 +353,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #endif
     #endif
     st_leafmtxp->batch_order = (int*)malloc(num_batch * sizeof(int));
+    #define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
-    FILE *fp;
-    char filename[100];
     sprintf(filename,"sizes_sorted_%d.dat",st_leafmtxp->mpi_rank);
     fp = fopen(filename,"w");
     fprintf(fp, "%d\n",num_batch);
