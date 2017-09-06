@@ -46,7 +46,7 @@ int hacapk_size_sorter_trans(const void* arg1,const void* arg2) {
     // sort by "group", whithin group, sort by m
     const int id1 = (val1[1]-1)/sort_group_size;
     const int id2 = (val2[1]-1)/sort_group_size;
-    return (id1 == id2 ? (val2[1] < val1[1]) : id2 < id1);
+    return (id1 == id2 ? (val2[2] < val1[2]) : id2 < id1);
     #else
     // sort by m
     return (val2[1] < val1[1]);
@@ -56,7 +56,7 @@ int hacapk_size_sorter_trans(const void* arg1,const void* arg2) {
     // sort by "group", whithin group, sort by m
     const int id1 = (val1[2]-1)/sort_group_size;
     const int id2 = (val2[2]-1)/sort_group_size;
-    return (id1 == id2 ? (val2[2] < val1[2]) : id2 < id1);
+    return (id1 == id2 ? (val2[1] < val1[1]) : id2 < id1);
     #else
     // sort by n
     return (val2[2] < val1[2]);
@@ -274,9 +274,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             sizes[sort_array_size*ip + 1] = ndt;
             sizes[sort_array_size*ip + 2] = kt;
             #if defined(BY_N)
-            sizes[sort_array_size*ip + 3] = (kt-1) / sort_group_size;
-            #else
             sizes[sort_array_size*ip + 3] = (ndt-1) / sort_group_size;
+            #else
+            sizes[sort_array_size*ip + 3] = (kt-1) / sort_group_size;
             #endif
             lwork = max(lwork, ndt*kt);
             if (max(ndt, kt) > batch_max_blocksize) {
@@ -288,9 +288,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             sizes[sort_array_size*ip + 1] = ndt;
             sizes[sort_array_size*ip + 2] = ndl;
             #if defined(BY_N)
-            sizes[sort_array_size*ip + 3] = (ndl-1) / sort_group_size;
-            #else
             sizes[sort_array_size*ip + 3] = (ndt-1) / sort_group_size;
+            #else
+            sizes[sort_array_size*ip + 3] = (ndl-1) / sort_group_size;
             #endif
             lwork = max(lwork, ndt*ndl);
             if (max(ndt, ndl) > batch_max_blocksize) {
@@ -314,9 +314,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             sizes[sort_array_size*num_batch + 1] = kt;
             sizes[sort_array_size*num_batch + 2] = ndl;
             #if defined(BY_N)
-            sizes[sort_array_size*num_batch + 3] = (ndl-1) / sort_group_size;
-            #else
             sizes[sort_array_size*num_batch + 3] = (kt-1) / sort_group_size;
+            #else
+            sizes[sort_array_size*num_batch + 3] = (ndl-1) / sort_group_size;
             #endif
             num_batch ++;
             lwork = max(lwork, kt*ndl);
