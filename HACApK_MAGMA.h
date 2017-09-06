@@ -120,7 +120,7 @@ typedef struct stc_HACApK_lcontrol {
 
 // sort blocks for batched kernel to utilize GPU better
 #define sort_array_size 4
-#define sort_group_size 8
+#define sort_group_size 1
 
 // On Tsubame
 //#define procs_per_node 3 // number processes per node (used to figure out which process uses which gpu)
