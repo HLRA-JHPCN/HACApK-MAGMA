@@ -124,7 +124,9 @@ void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_lcontrol *st_ctl, doub
         int ncsp = (mpinr+nrank-1)%nrank; // my source neighbor
         #define COMM_BY_ALLGATHERV
         #if defined(COMM_BY_ALLGATHERV)
+        tic = MPI_Wtime();
         MPI_Allgatherv(&zau[lsp[mpinr]-1], lnp[mpinr], MPI_DOUBLE, buffer, lnp, disps, MPI_DOUBLE, MPI_COMM_WORLD);
+        *time_mpi += (MPI_Wtime()-tic);
         for (ic=1; ic<nrank; ic++) {
            int nctp = (ncsp-ic+nrank+1)%nrank; // where it came from
            irct[0] = lnp[nctp];
@@ -918,7 +920,12 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     }
 
     double **b = (double**)malloc(gpus_per_proc * sizeof(double*));
+#define redundant_u
+#if defined(redundant_u)
+    double **u = st_leafmtxp->zu_mgpu;
+#else
     double **u = (double**)malloc(gpus_per_proc * sizeof(double*));
+#endif
     double **zr = (double**)malloc(gpus_per_proc * sizeof(double*));
     double **zp = (double**)malloc(gpus_per_proc * sizeof(double*));
     double **zt = (double**)malloc(gpus_per_proc * sizeof(double*));
@@ -929,8 +936,10 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     double **zakt = (double**)malloc(gpus_per_proc * sizeof(double*));
     for (d=0; d<gpus_per_proc; d++) {
         magma_setdevice((gpu_id+d)%procs_per_node);
-        if (MAGMA_SUCCESS != magma_dmalloc(&u[d], *nd) ||
-            MAGMA_SUCCESS != magma_dmalloc(&b[d], *nd) ||
+        if (MAGMA_SUCCESS != magma_dmalloc(&b[d], *nd) ||
+#if !defined(redundant_u)
+            MAGMA_SUCCESS != magma_dmalloc(&u[d], *nd) ||
+#endif
             MAGMA_SUCCESS != magma_dmalloc(&zt[d], *nd) ||
             MAGMA_SUCCESS != magma_dmalloc(&zr[d], *nd) ||
             MAGMA_SUCCESS != magma_dmalloc(&zp[d], *nd) ||
@@ -982,10 +991,10 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     int flag_set = 1;
     magma_queue_sync( queue[0] );
     tic = MPI_Wtime();
-    c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zshdw[0],st_leafmtxp,st_ctl,u[0],wws, zau_cpu,wwr_cpu,
-                                        &time_batch,&time_set,&time_copy,
-                                        &time_set1, &time_set2, &time_set3,
-                                        on_gpu, queue);
+    c_hacapk_adot_body_lfmtx_batch_mgpu2(flag_set, zshdw[0],st_leafmtxp,st_ctl,u,wws, zau_cpu,wwr_cpu,
+                                         &time_batch,&time_set,&time_copy,
+                                         &time_set1, &time_set2, &time_set3,
+                                         on_gpu, queue);
     magma_queue_sync( queue[0] );
     time_spmv += (MPI_Wtime()-tic);
     c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zshdw[0], zau_cpu,
@@ -1035,10 +1044,10 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         magma_setdevice(gpu_id);
         magma_queue_sync( queue[0] );
         tic = MPI_Wtime();
-        c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zakp[0],st_leafmtxp,st_ctl, zkp[0],wws, zau_cpu,wwr_cpu,
-                                            &time_batch,&time_set,&time_copy, 
-                                            &time_set1, &time_set2, &time_set3,
-                                            on_gpu, queue);
+        c_hacapk_adot_body_lfmtx_batch_mgpu2(flag_set, zakp[0],st_leafmtxp,st_ctl, zkp,wws, zau_cpu,wwr_cpu,
+                                             &time_batch,&time_set,&time_copy, 
+                                             &time_set1, &time_set2, &time_set3,
+                                             on_gpu, queue);
         magma_queue_sync( queue[0] );
         time_spmv += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakp[0], zau_cpu,
@@ -1071,10 +1080,10 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         magma_setdevice(gpu_id);
         magma_queue_sync( queue[0] );
         tic = MPI_Wtime();
-        c_hacapk_adot_body_lfmtx_batch_mgpu(flag_set, zakt[0],st_leafmtxp,st_ctl, zkt[0],wws, zau_cpu,wwr_cpu, 
-                                            &time_batch,&time_set,&time_copy,
-                                            &time_set1, &time_set2, &time_set3,
-                                            on_gpu, queue);
+        c_hacapk_adot_body_lfmtx_batch_mgpu2(flag_set, zakt[0],st_leafmtxp,st_ctl, zkt,wws, zau_cpu,wwr_cpu, 
+                                             &time_batch,&time_set,&time_copy,
+                                             &time_set1, &time_set2, &time_set3,
+                                             on_gpu, queue);
         magma_queue_sync( queue[0] );
         time_spmv += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakt[0],zau_cpu,
@@ -1138,7 +1147,9 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         magma_queue_destroy( queue[d] );
         magma_queue_destroy( queue[d+gpus_per_proc] );
 
+#if !defined(redundant_u)
         magma_free(u[d]);
+#endif
         magma_free(b[d]);
 
         magma_free(zt[d]);
@@ -1158,7 +1169,9 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     free(queue);
     if (buffer != NULL) free(buffer);
     free(disps);
+#if !defined(redundant_u)
     free(u);
+#endif
     free(b);
     free(zt);
     free(zr);
