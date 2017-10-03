@@ -143,7 +143,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
                 exit(0);
             }
         }
-        if (st_leafmtxp->n > 0) {
+        if (st_leafmtxp->gn > 0) {
             int retval = magma_dmalloc( &st_leafmtxp->zu_mgpu[d], st_leafmtxp->gn );
             if ( MAGMA_SUCCESS != retval ) {
                 fprintf( stderr, "!!!! magma_dmalloc failed for zu_gpu\n");
@@ -900,23 +900,30 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
     int *num_batch = (int*)malloc(gpus_per_proc * sizeof(int));
     int num_saved = 0, count = 0;
     // vectors are on GPU
-    double *zu = zu_mgpu[0];
     #ifdef PROF_MAGMA_BATCH
     double tic = MPI_Wtime();
     #endif
     if (flag == 1) {
+        #if 1
+        for (d=0; d<gpus_per_proc; d++) {
+            magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
+            magmablas_dlacpy( MagmaFull, st_leafmtxp->gn, 1, zu_mgpu[d], st_leafmtxp->gn,
+                              st_leafmtxp->zu_mgpu[d], st_leafmtxp->gn, queue[d+gpus_per_proc]);
+        }
+        #else
+        // CPU-GPU data copy, input vector
         if (gpus_per_proc > 1) {
             magma_setdevice( get_device_id(st_leafmtxp) );
-            magma_dgetvector( st_leafmtxp->gn, zu, 1, zu_cpu,  1, queue[0] );
+            magma_dgetvector( st_leafmtxp->gn, zu_mgpu[0], 1, zu_cpu,  1, queue[0] );
         }
-    }
-    // CPU-GPU data copy
-    if (flag == 1) {
+        magmablas_dlacpy( MagmaFull, st_leafmtxp->gn, 1, zu_mgpu[0], st_leafmtxp->gn,
+                              st_leafmtxp->zu_mgpu[0], st_leafmtxp->gn, queue[d+gpus_per_proc]);
         for (d=1; d<gpus_per_proc; d++) {
             magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
             magma_dsetvector_async( st_leafmtxp->gn,
                                     zu_cpu, 1, st_leafmtxp->zu_mgpu[d], 1, queue[d+gpus_per_proc] );
         }
+        #endif
     }
     // GPU compute
     //#define PROF_SETGET_
@@ -932,9 +939,6 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
     for (d=0; d<gpus_per_proc; d++) {
         magma_setdevice( (d+get_device_id(st_leafmtxp))%procs_per_node );
         if (d == 0) {
-            // input vector
-            magmablas_dlacpy( MagmaFull, st_leafmtxp->gn, 1, zu, st_leafmtxp->gn,
-                              st_leafmtxp->zu_mgpu[d], st_leafmtxp->gn, queue[d+gpus_per_proc]);
             // output vector
             //magmablas_dlacpy( MagmaFull, st_leafmtxp->m, 1, zau, st_leafmtxp->m,
             //                  st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );

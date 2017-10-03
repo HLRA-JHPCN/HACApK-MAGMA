@@ -921,9 +921,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
 
     double **b = (double**)malloc(gpus_per_proc * sizeof(double*));
 #define redundant_u
-#if defined(redundant_u)
-    double **u = st_leafmtxp->zu_mgpu;
-#else
+#if !defined(redundant_u)
     double **u = (double**)malloc(gpus_per_proc * sizeof(double*));
 #endif
     double **zr = (double**)malloc(gpus_per_proc * sizeof(double*));
@@ -961,6 +959,9 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     #endif
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(nd, st_leafmtxp, queue);
+#if defined(redundant_u)
+    double **u = st_leafmtxp->zu_mgpu;
+#endif
     //
     time_spmv = 0.0;
     time_mpi = 0.0;
@@ -991,7 +992,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     int flag_set = 1;
     magma_queue_sync( queue[0] );
     tic = MPI_Wtime();
-    c_hacapk_adot_body_lfmtx_batch_mgpu2(flag_set, zshdw[0],st_leafmtxp,st_ctl,u,wws, zau_cpu,wwr_cpu,
+    c_hacapk_adot_body_lfmtx_batch_mgpu2(0, zshdw[0],st_leafmtxp,st_ctl,u,wws, zau_cpu,wwr_cpu,
                                          &time_batch,&time_set,&time_copy,
                                          &time_set1, &time_set2, &time_set3,
                                          on_gpu, queue);
