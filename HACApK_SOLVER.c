@@ -282,8 +282,6 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     zrnorm = sqrt(zrnorm);
     if (mpinr == 0) {
         printf( "\n ** BICG (c version, flat) **\n" );
-printf( "%.2e\n",zrnorm );
-printf( "%.2e\n",bnorm );
         printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
         printf( "HACApK_bicgstab_lfmtx_flat start\n" );
     }

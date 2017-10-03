@@ -120,16 +120,19 @@ typedef struct stc_HACApK_lcontrol {
 
 // sort blocks for batched kernel to utilize GPU better
 #define sort_array_size 4
-#define sort_group_size 1
+#define sort_group_size 8
 
 // On Tsubame
 //#define procs_per_node 3 // number processes per node (used to figure out which process uses which gpu)
 //#define gpus_per_proc 3  // number of gpus per process (used for multi-GPU/proc support)
 
 // On Reedbush
-#define procs_per_node 2 // number processes per node (used to figure out which process uses which gpu)
-#define gpus_per_proc 2  // number of gpus per process (used for multi-GPU/proc support)
+//#define procs_per_node 2 // number processes per node (used to figure out which process uses which gpu)
+//#define gpus_per_proc 2  // number of gpus per process (used for multi-GPU/proc support)
 
+// On Saturn
+#define procs_per_node 1 // number processes per node (used to figure out which process uses which gpu)
+#define gpus_per_proc 1  // number of gpus per process (used for multi-GPU/proc support)
 
 void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp);
 void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
