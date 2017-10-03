@@ -271,8 +271,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
         if (sttmp->ltmtx == 1) { // compressed
             // dimension
             sizes[sort_array_size*ip + 0] = ip;
-            sizes[sort_array_size*ip + 1] = ndt;
-            sizes[sort_array_size*ip + 2] = kt;
+            sizes[sort_array_size*ip + 1] = ndt; // # of columns
+            sizes[sort_array_size*ip + 2] = kt;  // # of rows
             #if defined(BY_N)
             sizes[sort_array_size*ip + 3] = (ndt-1) / sort_group_size;
             #else
@@ -285,8 +285,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
         } else if(sttmp->ltmtx == 2) { // full
             // dimension
             sizes[sort_array_size*ip + 0] = ip;
-            sizes[sort_array_size*ip + 1] = ndt;
-            sizes[sort_array_size*ip + 2] = ndl;
+            sizes[sort_array_size*ip + 1] = ndt; // # of columns
+            sizes[sort_array_size*ip + 2] = ndl; // # of rows
             #if defined(BY_N)
             sizes[sort_array_size*ip + 3] = (ndt-1) / sort_group_size;
             #else
@@ -311,8 +311,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
         if (sttmp->ltmtx == 1) { // compressed
             // dimension
             sizes[sort_array_size*num_batch + 0] = ip;
-            sizes[sort_array_size*num_batch + 1] = kt;
-            sizes[sort_array_size*num_batch + 2] = ndl;
+            sizes[sort_array_size*num_batch + 1] = kt;  // # of columns
+            sizes[sort_array_size*num_batch + 2] = ndl; // # of rows
             #if defined(BY_N)
             sizes[sort_array_size*num_batch + 3] = (kt-1) / sort_group_size;
             #else
@@ -357,7 +357,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #ifdef OUTPUT_SIZES
     sprintf(filename,"sizes_sorted_%d.dat",st_leafmtxp->mpi_rank);
     fp = fopen(filename,"w");
-    fprintf(fp, "%d\n",num_batch);
+    fprintf(fp, "%d %d\n",num_batch,nlf);
     #endif
     for (ip = 0; ip < num_batch; ip++) {
         st_leafmtxp->batch_order[ip] = sizes[sort_array_size*ip + 0];
