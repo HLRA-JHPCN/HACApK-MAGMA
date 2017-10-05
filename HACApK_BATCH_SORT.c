@@ -353,7 +353,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #endif
     #endif
     st_leafmtxp->batch_order = (int*)malloc(num_batch * sizeof(int));
-    #define OUTPUT_SIZES
+    //#define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
     sprintf(filename,"sizes_sorted_%d.dat",st_leafmtxp->mpi_rank);
     fp = fopen(filename,"w");
