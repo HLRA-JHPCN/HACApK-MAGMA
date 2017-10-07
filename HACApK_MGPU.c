@@ -995,12 +995,21 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
             magma_setdevice(gpu_id+d);
 
             // call batched GEMV and non-blocking copy to CPU
+            #if 1 //  this split the batch into multiple GPUs
             c_hacapk_adot_body_lfmtx_mgpu_dgemv(d, ip_start, 
                                                 st_leafmtxp, saved_ip,
                                                 &ip_d[d], num_start, count,
                                                 &batchCount, &num_saved,
                                                 queue[d]);
-
+            #else
+            magmablas_dgemv_vbatched_max_nocheck_atomic(
+                                    st_leafmtxp->transA, &d_M[num_batch], &d_N[num_batch],
+                                    one, &d_A_array[num_batch], &d_lda[num_batch],
+                                         &d_X_array[num_batch], &d_inc[num_batch],
+                                         &d_Y_array[num_batch], &d_inc[num_batch],
+                                    *batchCount, max_M[count], max_N[count],
+                                    queue);
+            #endif
             num_batch[d] += (1+ batchCount);
             ip += batchCount;
         }
@@ -1040,9 +1049,14 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
         #endif
         for (d=1; d<gpus_per_proc; d++) {
             magma_setdevice(gpu_id+d);
+            #if 0
             cudaMemcpyAsync( dBuffer[d], &(st_leafmtxp->zau_mgpu[d][offset]), mloc*sizeof(double),
                              cudaMemcpyDeviceToDevice,
                              magma_queue_get_cuda_stream( queue[d] ) );
+            #else
+            cudaMemcpyPeerAsync( dBuffer[d], gpu_id, &(st_leafmtxp->zau_mgpu[d][offset]), gpu_id+d, mloc*sizeof(double),
+                                 magma_queue_get_cuda_stream( queue[d] ) );
+            #endif
             magma_event_record( event[d], queue[d] );
         }
         magma_setdevice(gpu_id);

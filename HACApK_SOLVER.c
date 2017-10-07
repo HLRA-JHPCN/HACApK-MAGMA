@@ -981,6 +981,19 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     for (d=0; d<gpus_per_proc; d++) {
         magma_dmalloc(&dBuffer[d], *nd);
     }
+    // setup peers
+    for (d=1; d<gpus_per_proc; d++) {
+        int canAccessPeer;
+        magma_setdevice(gpu_id+d);
+        cudaDeviceCanAccessPeer(&canAccessPeer, gpu_id+d, gpu_id);
+        if (canAccessPeer == 1) {
+            if (cudaDeviceEnablePeerAccess( gpu_id, 0 ) != cudaSuccess) {
+                printf( " %d:%d: cudaDeviceEnablePeerAccess( %d ) failed\n",mpinr,gpu_id+d,gpu_id );
+            }
+        } else {
+            printf( "cudaDeviceCanAccessPeer( %d, %d ) failed\n",gpu_id+d,gpu_id );
+        }
+    }
     // MPI buffer
     double *buffer = NULL;
     int *disps = NULL;
@@ -1004,6 +1017,10 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     time_set3 = 0.0;
     time_set4 = 0.0;
     time_copy = 0.0;
+    for (d=0; d<gpus_per_proc; d++) {
+        magma_setdevice(gpu_id+d);
+        magma_queue_sync( queue[d] );
+    }
     MPI_Barrier( icomm );
     st_measure_time = MPI_Wtime();
     // copy the input vector to GPU
@@ -1278,6 +1295,11 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
 
     magma_free(wws);
     magma_free(wwr);
+    // setup peers
+    for (d=1; d<gpus_per_proc; d++) {
+        magma_setdevice(gpu_id+d);
+        cudaDeviceDisablePeerAccess( gpu_id );
+    }
 }
 
 
