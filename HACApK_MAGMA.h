@@ -51,6 +51,7 @@ typedef struct stc_HACApK_leafmtxp {
   magma_int_t *h_M, *h_N;
   magma_int_t *h_lda;
   magma_int_t *max_M, *max_N;
+  magma_int_t *batch_size;
   // streamed GEMV
   magma_int_t num_streamed;
   magma_int_t num_streamed_t;
@@ -80,6 +81,8 @@ typedef struct stc_HACApK_leafmtxp {
   magma_int_t *nlf_mgpu;
   magma_int_t *num_batch_mgpu;
   magma_int_t *total_size_y_mgpu;
+  // workspaces
+  int *iwork;
   // MPI info
   //MPI_Comm mpi_comm;
   int      mpi_rank;
