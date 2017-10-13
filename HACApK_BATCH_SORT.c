@@ -357,7 +357,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #ifdef OUTPUT_SIZES
     sprintf(filename,"sizes_sorted_%d.dat",st_leafmtxp->mpi_rank);
     fp = fopen(filename,"w");
-    fprintf(fp, "%d\n",num_batch);
+    fprintf(fp, "%d %d\n",num_batch,nlf);
     #endif
     for (ip = 0; ip < num_batch; ip++) {
         st_leafmtxp->batch_order[ip] = sizes[sort_array_size*ip + 0];
