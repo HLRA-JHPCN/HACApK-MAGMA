@@ -1,12 +1,12 @@
 
 #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 
-#include	<stdio.h>
-#include	<stdlib.h>
-#include	<time.h>
-#include	"omp.h"
-#include	"mpi.h"
-#include	"HACApK_MAGMA.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include "omp.h"
+#include "mpi.h"
+#include "HACApK_MAGMA.h"
 
 // /////////////////////////////////////////////////////////////////////////
 // DGEMV using MAGMA
@@ -820,9 +820,12 @@ void  c_hacapk_adot_body_lfdel_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
     magma_free(st_leafmtxp->d_lda);
     magma_free(st_leafmtxp->d_inc);
 
+    magma_free_cpu(st_leafmtxp->h_I);
+    magma_free_cpu(st_leafmtxp->h_J);
     magma_free_cpu(st_leafmtxp->h_M);
     magma_free_cpu(st_leafmtxp->h_N);
     magma_free_cpu(st_leafmtxp->h_lda);
+    magma_free_cpu(st_leafmtxp->h_type);
     magma_free_cpu(st_leafmtxp->h_A_array);
     magma_free_cpu(st_leafmtxp->h_X_array);
     magma_free_cpu(st_leafmtxp->h_Y_array);
@@ -834,6 +837,9 @@ void  c_hacapk_adot_body_lfdel_batch_(stc_HACApK_leafmtxp *st_leafmtxp) {
         magma_free_cpu(st_leafmtxp->h_X_array_streamed);
         magma_free_cpu(st_leafmtxp->h_Y_array_streamed);
     }
+
+    magma_free_cpu(st_leafmtxp->max_N);
+    magma_free_cpu(st_leafmtxp->max_M);
     free(st_leafmtxp->batch_order);
     // let me finalize it here for now
 #ifdef MAGMA_INIT_PER

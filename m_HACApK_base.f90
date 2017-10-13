@@ -137,6 +137,7 @@ module m_HACApK_base
     type(c_ptr) :: h_lda
     type(c_ptr) :: max_M
     type(c_ptr) :: max_N
+    type(c_ptr) :: batch_size
 #else
     integer*4,pointer :: batch_order
     real*8,   pointer :: h_A_array
@@ -150,6 +151,7 @@ module m_HACApK_base
     integer*4,pointer :: h_lda
     integer*4,pointer :: max_M
     integer*4,pointer :: max_N
+    integer*4,pointer :: batch_size
 #endif
 !   streamed GEMV
     integer*4 num_streamed
@@ -196,6 +198,7 @@ module m_HACApK_base
     type(c_ptr) :: nlf_mgpu
     type(c_ptr) :: num_batch_mgpu
     type(c_ptr) :: total_size_y_mgpu
+    type(c_ptr) :: iwork
 #else
     real*8,   pointer :: d_A_mgpu
     real*8,   pointer :: d_X_mgpu
@@ -221,6 +224,7 @@ module m_HACApK_base
     integer*4,pointer :: nlf_mgpu
     integer*4,pointer :: num_batch_mgpu
     integer*4,pointer :: total_size_y_mgpu
+    integer*4,pointer :: iwork
 #endif
     !integer mpi_comm
     integer mpi_rank

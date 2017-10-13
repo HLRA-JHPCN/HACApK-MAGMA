@@ -672,7 +672,7 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
      write(6,*)
  endif
 #else
-#ifdef HAVE_MAGMA
+#if defined(HAVE_MAGMA)
    v(:)=1.0; b(:)=1.0
    call MPI_Barrier( icomm, ierr )
    if (mpinr==0) then
