@@ -81,6 +81,7 @@ module m_HACApK_base
     integer(c_int) n
     integer(c_int) gn
     integer(c_int) max_block
+    integer(c_double) gflops
     type(c_ptr) :: mtx1_gpu
     type(c_ptr) :: mtx2_gpu
     type(c_ptr) :: zu_gpu
@@ -92,6 +93,7 @@ module m_HACApK_base
     integer*4 n
     integer*4 gn
     integer*4 max_block
+    real*8 gflops
     real*8,pointer :: mtx1_gpu
     real*8,pointer :: mtx2_gpu
     real*8,pointer :: zu_gpu
@@ -303,6 +305,8 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  st_ctl%param(61)=1         ! ACA norm 1:MREM  2:test 3:norm
  st_ctl%param(62)=7         ! ACA : predictive average of k
  st_ctl%param(63)=1000;     ! ACA : k-max of R_k-matrix 30
+! st_ctl%param(63)=1;        ! ACA : k-max of R_k-matrix 30
+! WRITE(*,*) 'k-max set to be',st_ctl%param(63)
  st_ctl%param(64)=1;        ! ACA : minimun kt
  st_ctl%param(72)=1.0e-3;   ! ACA_EPS
  st_ctl%param(83)=500;      ! solver : maximum iterative number
