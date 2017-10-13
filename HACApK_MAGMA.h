@@ -168,10 +168,12 @@ typedef struct stc_HACApK_lcontrol {
   #endif
 #elif defined(REEDBUSH)
   // On Reedbush
+  #define gpus_per_node 2
   #define procs_per_node 2 // number processes per node (used to figure out which process uses which gpu)
-  #define gpus_per_proc 2  // number of gpus per process (used for multi-GPU/proc support)
+  #define gpus_per_proc 1  // number of gpus per process (used for multi-GPU/proc support)
 #else
   // On Saturn
+  #define gpus_per_node 1
   #define procs_per_node 1 // number processes per node (used to figure out which process uses which gpu)
   #define gpus_per_proc 1  // number of gpus per process (used for multi-GPU/proc support)
 #endif
