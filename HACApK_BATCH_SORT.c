@@ -1,11 +1,6 @@
 
 #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 
-#include	<stdio.h>
-#include	<stdlib.h>
-#include	<time.h>
-#include	"omp.h"
-#include	"mpi.h"
 #include	"HACApK_MAGMA.h"
 
 // /////////////////////////////////////////////////////////////////////////
@@ -127,6 +122,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     st_leafmtxp->max_block = 0;
     // do GEMV(NoTrans/Trans)
     st_leafmtxp->transA = MagmaNoTrans;
+    st_leafmtxp->gflops = 0.0;
 
     int num_batch = 0;
     int total_size_a = 0;
@@ -163,6 +159,8 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                 lda = magma_roundup( ndl, batch_pad );
                 total_size_a += lda*kt;
             }
+            st_leafmtxp->gflops += FLOPS_DGEMV( kt, ndt ) / 1e9;
+            st_leafmtxp->gflops += FLOPS_DGEMV( ndl, kt ) / 1e9;
 
             total_size_y += kt;
             num_batch += 2;
@@ -174,6 +172,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                 lda = magma_roundup( ndl, batch_pad );
                 total_size_a += lda*ndt;
             }
+            st_leafmtxp->gflops += FLOPS_DGEMV( ndl, ndt ) / 1e9;
             num_batch += 1;
         }
     }
@@ -188,6 +187,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             printf( "  > batched GEMV with Transposes\n" );
         } else {
             printf( "  > batched GEMV with Non Transposes\n" );
+        }
+        if (batch_pad != 32) {
+            printf( " !! using padding of %d !!\n",batch_pad );
         }
     }
     fflush(stdout);
@@ -254,6 +256,13 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     magma_imalloc_cpu(&max_M, count);
     magma_imalloc_cpu(&max_N, count);
 
+    #define OUTPUT_SIZES
+    #ifdef OUTPUT_SIZES
+    FILE *fp;
+    char filename[100];
+    sprintf(filename,"types_%d.dat",st_leafmtxp->mpi_rank);
+    fp = fopen(filename,"w");
+    #endif
     // sort batch
     int num_streamed = 0;
     int num_streamed_t = 0;
@@ -282,6 +291,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             if (max(ndt, kt) > batch_max_blocksize) {
                 num_streamed ++;
             }
+            fprintf(fp, "%d %d %d\n",1,kt,ndt);
         } else if(sttmp->ltmtx == 2) { // full
             // dimension
             sizes[sort_array_size*ip + 0] = ip;
@@ -296,6 +306,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             if (max(ndt, ndl) > batch_max_blocksize) {
                 num_streamed ++;
             }
+            fprintf(fp, "%d %d %d\n",3,ndl,ndt);
         }
     }
     num_batch = nlf;
@@ -324,15 +335,14 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                 num_streamed_t ++;
                 num_streamed ++;
             }
+            fprintf(fp, "%d %d %d\n",2,ndl,kt);
         }
     }
     if (st_leafmtxp->mpi_rank == 0) {
         printf( "\n\n ++ num_batch=%d (this include num_streamed), num_streamed=%d,%d ++\n\n",num_batch,num_streamed,num_streamed_t );
     }
-    #define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
-    FILE *fp;
-    char filename[100];
+    fclose(fp);
     sprintf(filename,"sizes_%d.dat",st_leafmtxp->mpi_rank);
     fp = fopen(filename,"w");
     fprintf(fp, "%d\n",num_batch);
@@ -353,7 +363,6 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     #endif
     #endif
     st_leafmtxp->batch_order = (int*)malloc(num_batch * sizeof(int));
-    //#define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
     sprintf(filename,"sizes_sorted_%d.dat",st_leafmtxp->mpi_rank);
     fp = fopen(filename,"w");
