@@ -345,7 +345,10 @@ contains
 ! C version, all on multiple GPUs (redudant computation on each GPU)
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-       call c_HACApK_bicgstab_cax_lfmtx_mgpu2(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+       ! redandantly perform local vectors on each GPU
+       !call c_HACApK_bicgstab_cax_lfmtx_mgpu2(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+       ! distribute local vectors among local GPUs
+       call c_HACApK_bicgstab_cax_lfmtx_mgpu3(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
