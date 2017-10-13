@@ -1,9 +1,4 @@
 
-#include	<stdio.h>
-#include	<stdlib.h>
-#include	<time.h>
-#include	"omp.h"
-#include	"mpi.h"
 #include	"HACApK_MAGMA.h"
 
 //!***c_HACApK_adot_body_lfmtx

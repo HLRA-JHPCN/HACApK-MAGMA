@@ -1,3 +1,14 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include "omp.h"
+#include "mpi.h"
+
+#ifdef GPU_AWARE
+ #include "mpi-ext.h"
+#endif
+
 typedef struct stc_HACApK_leafmtx {
   int ltmtx;
   int kt;
@@ -10,6 +21,8 @@ typedef struct stc_HACApK_leafmtx {
 
 #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 #include "magma_v2.h"
+#include "magma_dlapack.h"
+#include "../testing/flops.h"
 #endif
 
 typedef struct stc_HACApK_leafmtxp {
@@ -24,6 +37,7 @@ typedef struct stc_HACApK_leafmtxp {
   int n;         // matrix dimension
   int gn;        // matrix dimension (global)
   int max_block; // max block size
+  double gflops;
   magmaDouble_ptr *mtx1_gpu;
   magmaDouble_ptr *mtx2_gpu;
   magmaDouble_ptr zu_gpu;
@@ -120,6 +134,10 @@ typedef struct stc_HACApK_lcontrol {
 #define USE_QSORT
 #define batch_max_blocksize 10000000 
 //#define batch_max_blocksize 1000 
+
+// 20ms with rank=1
+//#define batch_pad 1
+
 
 // sort blocks for batched kernel to utilize GPU better
 #define sort_array_size 4
