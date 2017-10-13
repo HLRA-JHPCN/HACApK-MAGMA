@@ -192,6 +192,57 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
     // sort batch
     int lwork = 0;
     int *sizes = (int*)malloc( sort_array_size*num_batch * sizeof(int) );
+    //#define SORT_DENSE_FIRST
+    #ifdef SORT_DENSE_FIRST
+    num_batch = 0;
+    for (ip = 0; ip < nlf; ip++) {
+        /**/
+        stc_HACApK_leafmtx *sttmp;
+        sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+        ndl = sttmp->ndl; // m: number of rows
+        ndt = sttmp->ndt; // n: number of columns
+        kt  = sttmp->kt;  // rank
+        /**/
+
+        if(sttmp->ltmtx == 2) { // full
+            // dimension
+            sizes[sort_array_size*num_batch + 0] = ip;
+            sizes[sort_array_size*num_batch + 1] = ndt;
+            sizes[sort_array_size*num_batch + 2] = ndl;
+            #if defined(BY_N)
+            sizes[sort_array_size*num_batch + 3] = (ndt-1) / sort_group_size;
+            #else
+            sizes[sort_array_size*num_batch + 3] = (ndl-1) / sort_group_size;
+            #endif
+            lwork = max(lwork, ndt*ndl);
+            num_batch++;
+        }
+    }
+    int num_dense = num_batch;
+    for (ip = 0; ip < nlf; ip++) {
+        /**/
+        stc_HACApK_leafmtx *sttmp;
+        sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+        ndl = sttmp->ndl; // m: number of rows
+        ndt = sttmp->ndt; // n: number of columns
+        kt  = sttmp->kt;  // rank
+        /**/
+
+        if (sttmp->ltmtx == 1) { // compressed
+            // dimension
+            sizes[sort_array_size*num_batch + 0] = ip;
+            sizes[sort_array_size*num_batch + 1] = ndt;
+            sizes[sort_array_size*num_batch + 2] = kt;
+            #if defined(BY_N)
+            sizes[sort_array_size*num_batch + 3] = (ndt-1) / sort_group_size;
+            #else
+            sizes[sort_array_size*num_batch + 3] = (kt-1) / sort_group_size;
+            #endif
+            lwork = max(lwork, ndt*kt);
+            num_batch++;
+        }
+    }
+    #else
     for (ip = 0; ip < nlf; ip++) {
         /**/
         stc_HACApK_leafmtx *sttmp;
@@ -225,6 +276,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
             lwork = max(lwork, ndt*ndl);
         }
     }
+    #endif
     num_batch = nlf;
     for (ip = 0; ip < nlf; ip++) {
         /**/
@@ -250,14 +302,24 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
         }
     }
     if (st_leafmtxp->mpi_rank == 0) {
-        printf( "\n\n ++ num_batch=%d (nlf=%d) ++\n\n",num_batch,nlf );
+        printf( "\n\n ++ num_batch=%d (nlf=%d) ++\n",num_batch,nlf );
+        #ifdef SORT_DENSE_FIRST
+         printf( " ++ num_dense=%d ++\n",num_dense );
+        #endif
+        printf( "\n" );
     }
 
     #if defined(SORT_BATCH_BY_SIZES)
     #if defined(USE_QSORT)
-    qsort( sizes, nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
-    qsort( &sizes[sort_array_size*nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter_trans );
-    //qsort( &sizes[sort_array_size*nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
+     #ifdef SORT_DENSE_FIRST
+     qsort( sizes, num_dense, sort_array_size*sizeof(int), hacapk_size_sorter );
+     qsort( &sizes[num_dense], nlf-num_dense, sort_array_size*sizeof(int), hacapk_size_sorter );
+     qsort( &sizes[sort_array_size*nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter_trans );
+     #else
+     qsort( sizes, nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
+     qsort( &sizes[sort_array_size*nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter_trans );
+     #endif
+     //qsort( &sizes[sort_array_size*nlf], num_batch-nlf, sort_array_size*sizeof(int), hacapk_size_sorter );
     #else
     hacapk_sort(nlf, sizes);
     hacapk_sort(num_batch-nlf, &sizes[nlf]);
