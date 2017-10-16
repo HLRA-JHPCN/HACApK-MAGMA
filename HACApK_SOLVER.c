@@ -591,6 +591,16 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
     time = en_measure_time - st_measure_time;
+#if 1
+    c_hacapk_adot_body_lfmtx_batch_queue(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy, 
+                                         on_gpu, queue);
+    c_hacapk_adot_cax_lfmtx_comm_gpu(1, zshdw, zau_cpu, st_ctl,buffer,disps, wws_cpu, wwr_cpu, isct, irct, *nd, 
+                                     &time_copy,&time_mpi, queue);
+    magmablas_dlascl( MagmaFull, ione, ione, one, mone, *nd, ione, zshdw, *nd, queue, &info );
+    magma_daxpy( *nd, one, b, ione, zshdw, ione, queue );
+    zrnorm = sqrt(magma_ddot(*nd, zshdw, ione, zshdw, ione, queue));
+    printf( " resnorm=%.2e\n",zrnorm );
+#endif
     if (st_ctl->param[0] > 0) {
         st_leafmtxp->gflops *= (1.0+2.0*(double)step);
         //printf( " End: %d, %.2e\n",mpinr,time );
