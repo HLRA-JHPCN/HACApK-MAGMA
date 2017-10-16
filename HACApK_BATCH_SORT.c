@@ -19,7 +19,6 @@ int hacapk_size_sorter(const void* arg1,const void* arg2) {
   const int *val1 = (const int*)arg1;
   const int *val2 = (const int*)arg2;
 
-  //#define BY_GROUP
   #if defined(BY_GROUP)
   // sort by n "group", whithin group, sort by m
   return (val2[3] == val1[3] ? (val2[1] < val1[1]) : val2[3] < val1[3]);
@@ -256,7 +255,7 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
     magma_imalloc_cpu(&max_M, count);
     magma_imalloc_cpu(&max_N, count);
 
-    #define OUTPUT_SIZES
+    //#define OUTPUT_SIZES
     #ifdef OUTPUT_SIZES
     FILE *fp;
     char filename[100];
@@ -291,7 +290,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             if (max(ndt, kt) > batch_max_blocksize) {
                 num_streamed ++;
             }
+            #ifdef OUTPUT_SIZES
             fprintf(fp, "%d %d %d\n",1,kt,ndt);
+            #endif
         } else if(sttmp->ltmtx == 2) { // full
             // dimension
             sizes[sort_array_size*ip + 0] = ip;
@@ -306,7 +307,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
             if (max(ndt, ndl) > batch_max_blocksize) {
                 num_streamed ++;
             }
+            #ifdef OUTPUT_SIZES
             fprintf(fp, "%d %d %d\n",3,ndl,ndt);
+            #endif
         }
     }
     num_batch = nlf;
@@ -335,7 +338,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_lea
                 num_streamed_t ++;
                 num_streamed ++;
             }
+            #ifdef OUTPUT_SIZES
             fprintf(fp, "%d %d %d\n",2,ndl,kt);
+            #endif
         }
     }
     if (st_leafmtxp->mpi_rank == 0) {

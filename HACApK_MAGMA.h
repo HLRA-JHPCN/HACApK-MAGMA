@@ -143,8 +143,14 @@ typedef struct stc_HACApK_lcontrol {
 #define sort_array_size 4
 #define sort_group_size 8
 
-//#define TSUBAME
-#define REEDBUSH
+// number of queues used for HcMV
+#define num_queues 1
+// for rank=1..
+//#define num_queues 3
+//#define BY_GROUP
+
+#define TSUBAME
+//#define REEDBUSH
 #if defined(TSUBAME)
   // On Tsubame 2
   //#define procs_per_node 3 // number processes per node (used to figure out which process uses which gpu)
@@ -181,7 +187,8 @@ typedef struct stc_HACApK_lcontrol {
 void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp);
 void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
                                           double *time_batch, double *time_set, double *time_copy,
-                                          int on_gpu, magma_queue_t queue);
+                                          int on_gpu, magma_queue_t queue,
+                                          magma_queue_t *queue_hcmv, magma_event_t *event_hcmv);
 void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
                                      double *time_batch, double *time_set, double *time_copy);
 
@@ -201,7 +208,8 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
                                           double **dBuffer, magma_event_t *event,
                                           double *time_batch, double *time_set, double *time_copy,
                                           double *time_set1, double *time_set2, double *time_set3,
-                                          int on_gpu, magma_queue_t *queue);
+                                          int on_gpu, magma_queue_t *queue,
+                                          magma_queue_t **queue_hcmv, magma_event_t **event_hcmv);
 
 int hacapk_size_sorter(const void* arg1,const void* arg2);
 int hacapk_size_sorter_trans(const void* arg1,const void* arg2);
