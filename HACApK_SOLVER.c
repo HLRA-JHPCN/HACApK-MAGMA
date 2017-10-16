@@ -605,7 +605,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     time = en_measure_time - st_measure_time;
 #if 1
     c_hacapk_adot_body_lfmtx_batch_queue(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy, 
-                                         on_gpu, queue);
+                                         on_gpu, queue, NULL, NULL);
     c_hacapk_adot_cax_lfmtx_comm_gpu(1, zshdw, zau_cpu, st_ctl,buffer,disps, wws_cpu, wwr_cpu, isct, irct, *nd, 
                                      &time_copy,&time_mpi, queue);
     magmablas_dlascl( MagmaFull, ione, ione, one, mone, *nd, ione, zshdw, *nd, queue, &info );
@@ -1505,7 +1505,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu3_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     nrank = lpmd[1]; 
     MPI_Barrier( icomm );
 
-    assert(gpus_per_proc == 4);
+    assert(gpus_per_proc == gpus_per_node);
     //int gpus_per_node = 4;
     //magma_device_t devices[ MagmaMaxGPUs ];
     //magma_getdevices( devices, MagmaMaxGPUs, &gpus_per_node );
