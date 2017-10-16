@@ -12,7 +12,7 @@
 #if defined(HAVE_MAGMA_BATCH)
 
 void magma_iprint( magma_int_t m, magma_int_t n,
-                   magma_int_t *A, magma_int_t lda ) {
+                   const magma_int_t *A, magma_int_t lda ) {
     int i,j;
     for (i=0; i<m; i++) {
         for (j=0; j<n; j++) printf( "%d ",A[i+j*lda] );
