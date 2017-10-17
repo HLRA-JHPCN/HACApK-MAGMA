@@ -996,14 +996,17 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     int flag = 1;
     #endif
     int on_gpu = 1, d, gpu_id = (gpus_per_proc*get_device_id(st_leafmtxp))%gpus_per_node;
+    printf( " process %d on GPU(%d:%d)\n",mpinr,gpu_id,gpu_id+gpus_per_proc-1);
+
     magma_device_t cdev;
     magma_queue_t *queue = (magma_queue_t *)malloc(2*gpus_per_proc * sizeof(magma_queue_t));
     magma_event_t *event = (magma_event_t *)malloc(  gpus_per_proc * sizeof(magma_event_t));
-
-    magma_queue_t **queue_hcmv = (magma_queue_t**)malloc(gpus_per_proc * sizeof(magma_queue_t**));
-    magma_event_t **event_hcmv = (magma_event_t**)malloc(gpus_per_proc * sizeof(magma_event_t**));
-
-    printf( " process %d on GPU(%d:%d)\n",mpinr,gpu_id,gpu_id+gpus_per_proc-1);
+    magma_queue_t **queue_hcmv = NULL;
+    magma_event_t **event_hcmv = NULL;
+    if (num_queues > 1) {
+        queue_hcmv = (magma_queue_t**)malloc(gpus_per_proc * sizeof(magma_queue_t**));
+        event_hcmv = (magma_event_t**)malloc(gpus_per_proc * sizeof(magma_event_t**));
+    }
     for (d=0; d<gpus_per_proc; d++) {
         magma_setdevice(gpu_id+d);
         magma_getdevice( &cdev );
@@ -1012,15 +1015,13 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         magma_event_create( &event[d] );
         if (num_queues > 1) {
             int i;
-            queue_hcmv[d] = (magma_queue_t*)malloc(num_queues * sizeof(magma_queue_t));
-            event_hcmv[d] = (magma_event_t*)malloc(num_queues * sizeof(magma_event_t));
+            queue_hcmv[d] = (magma_queue_t*)malloc(   num_queues  * sizeof(magma_queue_t));
+            event_hcmv[d] = (magma_event_t*)malloc((1+num_queues) * sizeof(magma_event_t));
             for (i=0; i<num_queues; i++) {
                 magma_queue_create( cdev, &queue_hcmv[d][i] );
                 magma_event_create( &event_hcmv[d][i] );
             }
-        } else {
-            queue_hcmv[d] = NULL;
-            event_hcmv[d] = NULL;
+            magma_event_create( &event_hcmv[d][num_queues] );
         }
     }
     // main GPU
@@ -1061,21 +1062,24 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
 #if !defined(redundant_u)
             MAGMA_SUCCESS != magma_dmalloc(&u[d], *nd) ||
 #endif
-            MAGMA_SUCCESS != magma_dmalloc(&zt[d], *nd) ||
-            MAGMA_SUCCESS != magma_dmalloc(&zr[d], *nd) ||
+            MAGMA_SUCCESS != magma_dmalloc(&zt[d], 2*(*nd)) ||
             MAGMA_SUCCESS != magma_dmalloc(&zp[d], *nd) ||
             MAGMA_SUCCESS != magma_dmalloc(&zkp[d], *nd) ||
             MAGMA_SUCCESS != magma_dmalloc(&zkt[d], *nd) ||
-            MAGMA_SUCCESS != magma_dmalloc(&zakp[d], *nd) ||
-            MAGMA_SUCCESS != magma_dmalloc(&zakt[d], *nd) ||
-            MAGMA_SUCCESS != magma_dmalloc(&zshdw[d], *nd)) {
+            MAGMA_SUCCESS != magma_dmalloc(&zshdw[d], 3*(*nd))) {
           printf( " failed to allocate vectors (nd=%d)\n",*nd );
         }
+        zr[d]   = &zshdw[d][*nd];
+        zakp[d] = &zr[d][*nd];
+        zakt[d] = &zt[d][*nd];
     }
+    double *dnorm, *hnorm;
     magma_setdevice(gpu_id);
+    magma_dmalloc(&dnorm, 2);
     for (d=0; d<gpus_per_proc; d++) {
         magma_dmalloc(&dBuffer[d], *nd);
     }
+    magma_dmalloc_pinned(&hnorm, 2);
     // setup peers
     for (d=1; d<gpus_per_proc; d++) {
         int canAccessPeer;
@@ -1193,6 +1197,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         printf( "\nOriginal relative residual norm = %.2e/%.2e = %.2e\n",zrnorm,bnorm,zrnorm/bnorm );
         printf( " first time_mpi=%.2e\n",time_mpi );
         printf( "HACApK_bicgstab_lfmtx_mgpu2 start\n" );
+        if (num_queues > 1) printf( " ** num_queues = %d **\n",num_queues );
     }
     for ( step=1; step<=mstep; step++ ) {
         if (zrnorm/bnorm < eps) break;
@@ -1264,8 +1269,25 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         #endif
         //
         magma_setdevice(gpu_id);
+        #define DDOT_BY_DGEMV
+        #if defined(DDOT_BY_DGEMV)
+        /*magmablas_dgemv( MagmaTrans, *nd, 2,
+                         one,  zr[0], *nd,
+                               zshdw[0], ione,
+                         zero, dnorm, ione,
+                         queue[0] );*/
+        magma_dgemv( MagmaTrans, *nd, 2,
+                     one,  zr[0], *nd,
+                           zshdw[0], ione,
+                     zero, dnorm, ione,
+                     queue[0] );
+        magma_dgetvector( 2, dnorm, 1, hnorm, 1, queue[0] );
+        znorm = hnorm[0];
+        zden  = hnorm[1];
+        #else
         znorm = magma_ddot( *nd, zshdw[0], ione, zr[0], ione, queue[0] ); 
-        zden = magma_ddot( *nd, zshdw[0], ione, zakp[0], ione, queue[0] );
+        zden  = magma_ddot( *nd, zshdw[0], ione, zakp[0], ione, queue[0] );
+        #endif
         alpha = -znorm/zden;
         znormold = znorm;
         #if defined(PROF_MAGMA_BATCH)
@@ -1338,8 +1360,24 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         #endif
         //
         magma_setdevice(gpu_id);
+        #if defined(DDOT_BY_DGEMV)
+        /*magmablas_dgemv( MagmaTrans, *nd, 2,
+                         one,  zt[0], *nd,
+                               zakt[0], ione,
+                         zero, dnorm, ione,
+                         queue[0] );*/
+        magma_dgemv( MagmaTrans, *nd, 2,
+                     one,  zt[0], *nd,
+                           zakt[0], ione,
+                     zero, dnorm, ione,
+                     queue[0] );
+        magma_dgetvector( 2, dnorm, 1, hnorm, 1, queue[0] );
+        znorm = hnorm[0];
+        zden  = hnorm[1];
+        #else
         znorm = magma_ddot( *nd, zakt[0], ione, zt[0], ione, queue[0] ); 
-        zden = magma_ddot( *nd, zakt[0], ione, zakt[0], ione, queue[0] );
+        zden  = magma_ddot( *nd, zakt[0], ione, zakt[0], ione, queue[0] );
+        #endif
         zeta = znorm/zden;
         #if defined(PROF_MAGMA_BATCH)
         for (d=1; d<gpus_per_proc; d++) {
@@ -1368,9 +1406,25 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         tic = MPI_Wtime();
         #endif
         magma_setdevice(gpu_id);
-        beta = magma_ddot( *nd, zshdw[0], ione, zr[0], ione, queue[0]);
+        #if defined(DDOT_BY_DGEMV)
+        /*magmablas_dgemv( MagmaTrans, *nd, 2,
+                         one,  zshdw[0], *nd,
+                               zr[0], ione,
+                         zero, dnorm, ione,
+                         queue[0] );*/
+        magma_dgemv( MagmaTrans, *nd, 2,
+                     one,  zshdw[0], *nd,
+                           zr[0], ione,
+                     zero, dnorm, ione,
+                     queue[0] );
+        magma_dgetvector( 2, dnorm, 1, hnorm, 1, queue[0] );
+        beta    = hnorm[0];
+        zrnorm  = hnorm[1];
+        #else
+        beta   = magma_ddot( *nd, zshdw[0], ione, zr[0], ione, queue[0]);
+        zrnorm = magma_ddot( *nd, zr[0],    ione, zr[0], ione, queue[0] );
+        #endif
         beta = -alpha/zeta * beta/znormold;
-        zrnorm = magma_ddot( *nd, zr[0], ione, zr[0], ione, queue[0] );
         zrnorm = sqrt(zrnorm);
         #if defined(PROF_MAGMA_BATCH)
         for (d=1; d<gpus_per_proc; d++) {
@@ -1425,12 +1479,9 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         magma_free(b[d]);
 
         magma_free(zt[d]);
-        magma_free(zr[d]);
         magma_free(zp[d]);
         magma_free(zkp[d]);
-        magma_free(zakp[d]);
         magma_free(zkt[d]);
-        magma_free(zakt[d]);
         magma_free(zshdw[d]);
     }
     // delete matrix
@@ -1829,19 +1880,29 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu3_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
             d = (dd0+dd)%gpus_per_proc;
             int nd_d = (dd > swc_dd ? *nd-nd_loc2 : nd_loc2);
             magma_setdevice(gpu_id+d);
-            #if 1 
+            #if defined(DDOT_BY_DGEMV)
+            /*magma_dgemm( MagmaTrans, MagmaNoTrans,
+                         2, 1, nd_d,
+                         one, &(zr[d][offset]), *nd,
+                              &(zshdw[d][offset]), *nd,
+                         zero,  znorm_d[d], 2, queue[d] );*/
+            /*magmablas_dgemv( MagmaTrans, nd_d, 2,
+                             one,  &(zr[d][offset]), *nd,
+                                   &(zshdw[d][offset]), ione,
+                             zero, znorm_d[d], ione,
+                             queue[d] );*/
+            magma_dgemv( MagmaTrans, nd_d, 2,
+                         one,  &(zr[d][offset]), *nd,
+                               &(zshdw[d][offset]), ione,
+                         zero, znorm_d[d], ione,
+                         queue[d] );
+            #else
             cublasSetPointerMode( magma_queue_get_cublas_handle( queue[d] ), CUBLAS_POINTER_MODE_DEVICE );
             cublasDdot( magma_queue_get_cublas_handle( queue[d] ), nd_d, 
                         &(zshdw[d][offset]), ione, &(zr[d][offset]), ione, &znorm_d[d][0] );
             cublasDdot( magma_queue_get_cublas_handle( queue[d] ), nd_d,
                         &(zshdw[d][offset]), ione, &(zakp[d][offset]), ione, &znorm_d[d][1] );
             cublasSetPointerMode(magma_queue_get_cublas_handle( queue[d] ), CUBLAS_POINTER_MODE_HOST);
-            #else
-            magma_dgemm( MagmaTrans, MagmaNoTrans,
-                         2, 1, nd_d,
-                         one, &(zr[d][offset]), *nd,
-                              &(zshdw[d][offset]), *nd,
-                         zero,  znorm_d[d], 2, queue[d] );
             #endif
             if (d == 1) { // GPU-1 -> GPU-3
                 cudaMemcpyPeerAsync( &znorm_d[3][2], gpu_id+3, znorm_d[1], gpu_id+1, 2*sizeof(double),
@@ -1986,19 +2047,29 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu3_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
             d = (dd+dd0)%gpus_per_proc;
             int nd_d = (dd > swc_dd ? *nd-nd_loc2 : nd_loc2);
             magma_setdevice(gpu_id+d);
-            #if 1
+            #if defined(DDOT_BY_DGEMV)
+            /*magma_dgemm( MagmaTrans, MagmaNoTrans,
+                         2, 1, nd_d,
+                         one, &(zt[d][offset]), *nd,
+                              &(zakt[d][offset]), *nd,
+                         zero,  znorm_d[d], 2, queue[d] );*/
+            /*magmablas_dgemv( MagmaTrans, nd_d, 2,
+                             one,  &(zt[d][offset]), *nd,
+                                   &(zakt[d][offset]), ione,
+                             zero, znorm_d[d], ione,
+                             queue[d] );*/
+            magma_dgemv( MagmaTrans, nd_d, 2,
+                         one,  &(zt[d][offset]), *nd,
+                               &(zakt[d][offset]), ione,
+                         zero, znorm_d[d], ione,
+                         queue[d] );
+            #else
             cublasSetPointerMode( magma_queue_get_cublas_handle( queue[d] ), CUBLAS_POINTER_MODE_DEVICE );
             cublasDdot( magma_queue_get_cublas_handle( queue[d] ), nd_d, 
                         &(zakt[d][offset]), ione, &(zt[d][offset]), ione, &znorm_d[d][0] );
             cublasDdot( magma_queue_get_cublas_handle( queue[d] ), nd_d,
                         &(zakt[d][offset]), ione, &(zakt[d][offset]), ione, &znorm_d[d][1] );
             cublasSetPointerMode(magma_queue_get_cublas_handle( queue[d] ), CUBLAS_POINTER_MODE_HOST);
-            #else
-            magma_dgemm( MagmaTrans, MagmaNoTrans,
-                         2, 1, nd_d,
-                         one, &(zt[d][offset]), *nd,
-                              &(zakt[d][offset]), *nd,
-                         zero,  znorm_d[d], 2, queue[d] );
             #endif
             if (d == 1) { // GPU-1 -> GPU-3
                 cudaMemcpyPeerAsync( &znorm_d[3][2], gpu_id+3, znorm_d[d], gpu_id+d, 2*sizeof(double),
@@ -2114,18 +2185,28 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu3_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
             d = (dd0+dd)%gpus_per_proc;
             int nd_d = (dd > swc_dd ? *nd-nd_loc2 : nd_loc2);
             magma_setdevice(gpu_id+d);
-            #if 1
+            #if defined(DDOT_BY_DGEMV)
+            /*magma_dgemm( MagmaTrans, MagmaNoTrans, 2, 1, nd_d,
+                         one, &(zshdw[d][offset]), *nd,
+                              &(zr[d][offset]), *nd,
+                         zero,  znorm_d[d], 2, queue[d] );*/
+            /*magmablas_dgemv( MagmaTrans, nd_d, 2,
+                             one,  &(zshdw[d][offset]), *nd,
+                                   &(zr[d][offset]), ione,
+                             zero, znorm_d[d], ione,
+                             queue[d] );*/
+            magma_dgemv( MagmaTrans, nd_d, 2,
+                         one,  &(zshdw[d][offset]), *nd,
+                               &(zr[d][offset]), ione,
+                         zero, znorm_d[d], ione,
+                         queue[d] );
+            #else
             cublasSetPointerMode( magma_queue_get_cublas_handle( queue[d] ), CUBLAS_POINTER_MODE_DEVICE );
             cublasDdot( magma_queue_get_cublas_handle( queue[d] ), nd_d, 
                         &(zr[d][offset]), ione, &(zshdw[d][offset]), ione, &znorm_d[d][0] );
             cublasDdot( magma_queue_get_cublas_handle( queue[d] ), nd_d,
                         &(zr[d][offset]), ione, &(zr[d][offset]), ione, &znorm_d[d][1] );
             cublasSetPointerMode(magma_queue_get_cublas_handle( queue[d] ), CUBLAS_POINTER_MODE_HOST);
-            #else
-            magma_dgemm( MagmaTrans, MagmaNoTrans, 2, 1, nd_d,
-                         one, &(zshdw[d][offset]), *nd,
-                              &(zr[d][offset]), *nd,
-                         zero,  znorm_d[d], 2, queue[d] );
             #endif
             if (d == 1) { // GPU-1 -> GPU-3
                 cudaMemcpyPeerAsync( &znorm_d[3][2], gpu_id+3, znorm_d[d], gpu_id+d, 2*sizeof(double),
