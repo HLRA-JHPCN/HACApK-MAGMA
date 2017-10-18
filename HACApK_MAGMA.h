@@ -135,17 +135,16 @@ typedef struct stc_HACApK_lcontrol {
 #define batch_max_blocksize 10000000 
 //#define batch_max_blocksize 1000 
 
-// 20ms with rank=1
-//#define batch_pad 1
-
-
 // sort blocks for batched kernel to utilize GPU better
 #define sort_array_size 4
 #define sort_group_size 8
 
 // number of queues used for HcMV
 #define num_queues 1
+
 // for rank=1..
+//#define batch_pad 1
+// not used..
 //#define num_queues 3
 //#define BY_GROUP
 

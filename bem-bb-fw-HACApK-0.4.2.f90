@@ -362,6 +362,12 @@ contains
       read( 11, * ) ppohBEM_max_steps
       close( 11 )
     endif
+!    ppohBEM_max_steps = 20
+!    if( irank .eq. 0 ) then
+!        WRITE(*,*)
+!        WRITE(*,*) 'set max_step 20'
+!        WRITE(*,*)
+!    endif 
 
     if( grank .eq. 0 ) then
       write(*,*) "Number of unknowns set on each face element = ", &
