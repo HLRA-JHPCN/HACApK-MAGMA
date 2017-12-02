@@ -1675,6 +1675,7 @@ __global__ void cuda_matvec_1kernel
 	}
       }
     }
+    __syncthreads();
   }
 }
 
