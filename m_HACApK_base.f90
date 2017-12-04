@@ -221,8 +221,8 @@ module m_HACApK_base
     integer*4,pointer :: num_batch_mgpu
 #endif
     !integer mpi_comm
-    integer mpi_rank
 #endif
+    integer mpi_rank
     type(st_HACApK_leafmtx),pointer :: st_lf(:)=>null()
   end type st_HACApK_leafmtxp
 

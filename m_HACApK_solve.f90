@@ -79,7 +79,8 @@ contains
  enddo
  deallocate(wws,wwr)
  end subroutine HACApK_adot_lfmtx_p
- 
+
+#ifndef WITHOUT_GPU
 !***HACApK_adot_cax_lfmtx_hyp
  subroutine HACApK_adot_cax_lfmtx_hyp(zau,st_leafmtxp,st_ctl,zu,wws,wwr,isct,irct,nd, &
                                       time_batch, time_set, time_copy, time_spmv, time_mpi)
@@ -123,6 +124,7 @@ contains
    enddo
  endif
  end subroutine HACApK_adot_cax_lfmtx_hyp
+#endif
 
 !***HACApK_adot_lfmtx_hyp
  subroutine HACApK_adot_lfmtx_hyp(zau,st_leafmtxp,st_ctl,zu,wws,wwr,isct,irct,nd)
@@ -339,6 +341,7 @@ contains
  enddo
 end subroutine HACApK_bicgstab_lfmtx
 
+#ifndef WITHOUT_GPU
 !***HACApK_bicgstab_cax_lfmtx_hyp
  subroutine HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
  use iso_fortran_env
@@ -464,6 +467,7 @@ end subroutine HACApK_bicgstab_lfmtx
 ! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_set   =',time_set
 ! if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'FORTRAN      >time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_hyp
+#endif
 
 !***HACApK_bicgstab_lfmtx_hyp
  subroutine HACApK_bicgstab_lfmtx_hyp(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
@@ -888,6 +892,7 @@ end function HACApK_adot_pmt_lfmtx_p
 end function HACApK_adot_pmt_lfmtx_hyp
 !
 !
+#ifndef WITHOUT_GPU
 !***HACApK_bicgstab_cax_lfmtx_flat
  subroutine HACApK_bicgstab_cax_lfmtx_flat(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn) bind(C)
  use, intrinsic ::  iso_c_binding
@@ -1003,6 +1008,7 @@ end function HACApK_adot_pmt_lfmtx_hyp
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      >time_set   =',time_set
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT      >time_batch =',time_batch
 end subroutine HACApK_bicgstab_cax_lfmtx_flat
+#endif
 ! 
 !***HACApK_adot_cax_lfmtx_comm
  subroutine HACApK_adot_cax_lfmtx_comm(zau,st_leafmtxp,st_ctl,wws,wwr,isct,irct,nd, time_mpi)

@@ -81,8 +81,8 @@ typedef struct stc_HACApK_leafmtxp {
   magma_int_t *num_batch_mgpu;
   // MPI info
   //MPI_Comm mpi_comm;
-  int      mpi_rank;
 #endif
+  int      mpi_rank;
   //
   stc_HACApK_leafmtx *st_lf;
 } stc_HACApK_leafmtxp;
@@ -127,12 +127,15 @@ typedef struct stc_HACApK_lcontrol {
 #define gpus_per_proc 3  // number of gpus per process (used for multi-GPU/proc support)
 
 void c_hacapk_adot_body_lfcpy_batch_sorted_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp);
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
                                           double *time_batch, double *time_set, double *time_copy,
                                           int on_gpu, magma_queue_t queue);
+#endif
 void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
                                      double *time_batch, double *time_set, double *time_copy);
 
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *st_leafmtxp,
                                                  magma_queue_t *queue);
 void c_hacapk_adot_body_lfmtx_batch_mgpu(int flag, double *zau, 
@@ -140,13 +143,16 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu(int flag, double *zau,
                                          double *zu, double *zbu,
                                          double *zau_cpu, double *zu_cpu,
                                          double *time_batch, double *time_set, double *time_copy,
-double *time_set2, double *time_set3,
+										 double *time_set2, double *time_set3,
                                          int on_gpu, magma_queue_t *queue);
+#endif
 
 int hacapk_size_sorter(const void* arg1,const void* arg2);
 int hacapk_size_sorter_trans(const void* arg1,const void* arg2);
 void hacapk_sort(int n, int *sizes);
 
+#ifndef WITHOUT_GPU
 static int get_device_id(stc_HACApK_leafmtxp *st_leafmtxp) {
     return (st_leafmtxp->mpi_rank)%procs_per_node;
 }
+#endif

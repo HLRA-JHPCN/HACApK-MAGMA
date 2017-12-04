@@ -4,7 +4,9 @@
 #include	"omp.h"
 #include	"mpi.h"
 #include	"HACApK_MAGMA.h"
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 #include        "magma_dlapack.h"
+#endif
 
 // !! BiCG in C !!
 double c_hacapk_dotp_d(int nd, double *b, double *a) {
@@ -16,6 +18,7 @@ double c_hacapk_dotp_d(int nd, double *b, double *a) {
     return norm;
 }
 
+#ifndef WITHOUT_GPU
 #define PINNED_BUFFER
 #define PORTABLE_BUFFER
 magma_int_t
@@ -28,7 +31,9 @@ magma_dmalloc_pinned_portable( double** ptrPtr, size_t size )
     }
     return MAGMA_SUCCESS;
 }
+#endif
 
+#ifndef WITHOUT_GPU
 #define WARMUP_MPI
 void c_hacapk_adot_cax_lfmtx_warmup(stc_HACApK_lcontrol *st_ctl,
                                     double*zau, double *wws, double *wwr, int nd) {
@@ -72,7 +77,9 @@ void c_hacapk_adot_cax_lfmtx_warmup(stc_HACApK_lcontrol *st_ctl,
         }
     }
 }
+#endif
 
+#ifndef WITHOUT_GPU
 void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_lcontrol *st_ctl,
                                   double *wws, double *wwr, int *isct, int *irct, int nd, double *time_mpi) {
     int ione = 1;
@@ -139,7 +146,9 @@ void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_lcontrol *st_ctl,
         }
     }
 }
+#endif
 
+#ifndef WITHOUT_GPU
 void c_hacapk_adot_cax_lfmtx_comm_gpu(int flag, double *zau_gpu, double *zau,
                                       stc_HACApK_lcontrol *st_ctl,
                                       double *wws, double *wwr, int *isct, int *irct, int nd, 
@@ -175,6 +184,7 @@ void c_hacapk_adot_cax_lfmtx_comm_gpu(int flag, double *zau_gpu, double *zau,
         *time_copy += MPI_Wtime()-tic;
     }
 }
+#endif
 
 void  c_hacapk_adot_body_lfmtx_seq_calc
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
@@ -485,6 +495,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
   free(zshdw);
 }
 
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 void  c_hacapk_adot_body_lfcpy_magma(int *nd, stc_HACApK_leafmtxp *st_leafmtxp) {
   // local variables
   register int ip;
@@ -961,6 +972,8 @@ void c_hacapk_adot_body_lfdel_magma
   free(zakt);
   free(zshdw);
 }
+#endif
+// endof #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 
 // C + OpenMP
 
@@ -1808,6 +1821,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
     free(zshdw);
 }
 
+#ifndef WITHOUT_GPU
 void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
                                        double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
     // local constants
@@ -1968,8 +1982,10 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     free(zakt);
     free(zshdw);
 }
+#endif
 
-#include "magma_v2.h"
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
+// #include "magma_v2.h"
 
 // BATCH on GPU
 void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
@@ -2757,8 +2773,11 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     magma_free(wws);
     magma_free(wwr);
 }
+#endif
+// endof #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 
 
+#if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)
 ///////////////////////////////////////////////////////////////////////////
 // pipelined version
 // 
@@ -3030,3 +3049,5 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     magma_free(zy);
     magma_free(zv);
 }
+#endif
+// endof #if defined(HAVE_MAGMA) | defined(HAVE_MAGMA_BATCH)

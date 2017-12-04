@@ -365,6 +365,7 @@ contains
      call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
 #endif
 #if 1
+#ifndef WITHOUT_GPU
 ! only MATVEC on GPU (magma, batched, ?)
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -372,7 +373,7 @@ contains
      endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-       call HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
@@ -381,7 +382,9 @@ contains
        write(6,*) 
      endif
 #endif
+#endif
 #if 1
+#ifndef WITHOUT_GPU
 ! a simpler "flat" version.
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
@@ -397,6 +400,7 @@ contains
        write(6,2000) ' time_HACApK_flat MATVEC on GPU =',time_bicgstab
        write(6,*) 
      endif
+#endif
 #endif
 #if 0
 ! C full CPU (sequential)
@@ -467,6 +471,7 @@ contains
         write(6,*)
      endif
 #endif
+#ifndef WITHOUT_GPU
 #if 1
 ! C MAGMA
      u_copy(:nd) = u(:nd)
@@ -801,6 +806,8 @@ contains
        write(6,*) 
      endif
 #endif
+#endif
+! #ifndef WITHOUT_GPU
 #if 0
 ! C version, pipeline on one GPU / proc
 #if defined(PIPE_BICG)
