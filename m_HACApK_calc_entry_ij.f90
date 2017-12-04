@@ -28,13 +28,18 @@ use m_ppohBEM_matrix_element_ij
 !*** type :: st_HACApK_calc_entry
   type :: st_HACApK_calc_entry
   real*8,pointer :: ao(:)
+!dir$ attributes align:64 :: ao
   integer :: nd,lp61
   integer :: nond,nofc,number_element_dof,nond_on_face,nint_para_fc,ndble_para_fc
   integer,pointer :: int_para_fc(:,:), face2node(:,:)
+!dir$ attributes align:64 :: int_para_fc, face2node
   real*8,pointer  :: dble_para_fc(:,:)
+!dir$ attributes align:64 :: dble_para_fc
   type(coordinate),pointer :: np(:)
+!dir$ attributes align:64 :: np
 
   real*8,pointer :: zx(:),zy(:),zz(:)
+!dir$ attributes align:64 :: zx,zy,zz
   end type st_HACApK_calc_entry
 
 public :: HACApK_entry_ij

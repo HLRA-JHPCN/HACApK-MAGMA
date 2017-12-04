@@ -42,6 +42,7 @@ contains
  type(st_HACApK_lcontrol) :: st_ctl
  real*8 :: zau(nd),zu(nd)
  real*8,dimension(:),allocatable :: wws,wwr
+!dir$ attributes align:64 :: wws,wwr
  integer*4 :: ISTATUS(MPI_STATUS_SIZE),isct(2),irct(2)
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  1000 format(5(a,i10)/)
@@ -169,6 +170,7 @@ contains
  type(st_HACApK_lcontrol) :: st_ctl
  real*8 :: zau(nd),zu(nd)
  real*8,dimension(:),allocatable :: zbu
+!dir$ attributes align:64 :: zbu
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
@@ -209,6 +211,7 @@ contains
  real*8 :: zau(*),zu(*)
  real*8,dimension(:),allocatable :: zbut
  real*8,dimension(:),allocatable :: zaut
+!dir$ attributes align:64 :: zbut, zaut
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),ltmp(:)
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
@@ -261,6 +264,7 @@ contains
  type(st_HACApK_lcontrol) :: st_ctl
  real*8 :: zu(nd),zr(nd)
  real*8,dimension(:),allocatable :: zau
+!dir$ attributes align:64 :: zau
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
@@ -295,6 +299,7 @@ contains
  real*8 :: u(nd),b(nd)
  real*8 :: param(*)
  real*8,dimension(:),allocatable :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
+!dir$ attributes align:64 :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
@@ -352,6 +357,8 @@ end subroutine HACApK_bicgstab_lfmtx
  real*8 :: param(*)
  real*8,dimension(:),allocatable :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
  real*8,dimension(:),allocatable :: wws,wwr
+!dir$ attributes align:64 :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
+!dir$ attributes align:64 :: wws,wwr
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  integer*4 :: isct(2),irct(2)
  real*8 time_tot, time_spmv, time_mpi, time_batch, time_set, time_copy, tic
@@ -478,6 +485,8 @@ end subroutine HACApK_bicgstab_cax_lfmtx_hyp
  real*8 :: param(*)
  real*8,dimension(:),allocatable :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
  real*8,dimension(:),allocatable :: wws,wwr
+!dir$ attributes align:64 :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
+!dir$ attributes align:64 :: wws,wwr
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  integer*4 :: isct(2),irct(2)
  1000 format(5(a,i10)/)
@@ -533,8 +542,10 @@ end subroutine HACApK_bicgstab_lfmtx_hyp
  real*8 :: param(*)
  real*8,dimension(:),allocatable :: zr,zar,capap
  real*8,dimension(:,:),allocatable,target :: zp,zap
+!dir$ attributes align:64 :: zr,zar,capap,zp,zap
  real*8,pointer :: zq(:)
  real*8,dimension(:),allocatable :: wws,wwr
+!dir$ attributes align:64 :: wws,wwr
  integer*4 :: isct(2),irct(2)
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
  1000 format(5(a,i10)/)
@@ -597,6 +608,7 @@ end subroutine
  type(st_HACApK_leafmtxp) :: st_leafmtxp
  type(st_HACApK_lcontrol) :: st_ctl
  real*8,dimension(:),allocatable :: wws,wwr,u,b
+!dir$ attributes align:64 :: wws,wwr,u,b
  integer*4 :: isct(2),irct(2)
  real*8,pointer :: param(:)
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:)
@@ -625,8 +637,10 @@ subroutine HACApK_measurez_time_ax_FPGA_lfmtx(st_leafmtxp,st_ctl,nd,nstp,lrtrn) 
  type(st_HACApK_lcontrol) :: st_ctl
 #ifdef HAVE_MAGMA_PINNED
  real*8,dimension(:),allocatable, pinned :: wws,wwr,u,v,b
+!dir$ attributes align:64 :: wws,wwr,u,v,b
 #else
  real*8,dimension(:),allocatable :: wws,wwr,u,v,b
+!dir$ attributes align:64 :: wws,wwr,u,v,b
 #endif
  integer*4 :: isct(2),irct(2)
  real*8,pointer :: param(:)
@@ -804,8 +818,10 @@ subroutine HACApK_measurez_time_check(st_leafmtxp,st_ctl,nd,nstp,lrtrn) bind(C)
  type(st_HACApK_lcontrol) :: st_ctl
 #ifdef HAVE_MAGMA_PINNED
  real*8,dimension(:),allocatable, pinned :: wws,wwr,u,v,b
+!dir$ attributes align:64 :: wws,wwr,u,v,b
 #else
  real*8,dimension(:),allocatable :: wws,wwr,u,v,b
+!dir$ attributes align:64 :: wws,wwr,u,v,b
 #endif
  integer*4 :: isct(2),irct(2)
  real*8,pointer :: param(:)
@@ -852,6 +868,7 @@ end subroutine HACApK_measurez_time_check
  type(st_HACApK_calc_entry) :: st_bemv
  real*8 :: ww(st_bemv%nd),aww(st_bemv%nd)
  real*8,dimension(:),allocatable :: u,au
+!dir$ attributes align:64 :: u,au
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:),lod(:)
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
@@ -875,6 +892,7 @@ end function HACApK_adot_pmt_lfmtx_p
  real*8 :: ww(*),aww(*)
  real*8,dimension(:),allocatable :: u,au,wws,wwr
  integer*4,dimension(:),allocatable :: isct,irct
+!dir$ attributes align:64 :: u,au,wws,wwr,isct,irct
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:),lod(:)
  1000 format(5(a,i10)/)
  2000 format(5(a,f10.4)/)
@@ -906,6 +924,8 @@ end function HACApK_adot_pmt_lfmtx_hyp
 ! local arrays
  real*8,dimension(:),allocatable :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
  real*8,dimension(:),allocatable :: wws,wwr
+!dir$ attributes align:64 :: zr,zshdw,zp,zt,zkp,zakp,zkt,zakt
+!dir$ attributes align:64 :: wws,wwr
  integer*4,pointer :: lpmd(:)
  integer*4 :: isct(2),irct(2)
 ! local variables

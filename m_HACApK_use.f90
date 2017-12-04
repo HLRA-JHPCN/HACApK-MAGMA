@@ -88,6 +88,7 @@ contains
  integer*8 :: mem8,nth1_mem,imem
  integer*4 :: ierr
  integer*4,dimension(:),allocatable :: lnmtx(:)
+!dir$ attributes align:64 :: lnmtx
  1000 format(5(a,i10)/)
  2000 format(5(a,1pe15.8)/)
  
@@ -194,6 +195,7 @@ contains
  real*8 :: rhs(st_bemv%nd),sol(st_bemv%nd),ztol
  real*8,pointer :: param(:)
  real*8,dimension(:),allocatable :: u,b,www,ao
+!dir$ attributes align:64 :: u,b,www,ao
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:),lod(:)
  1000 format(5(a,i10)/)
  2000 format(5(a,1pe15.8)/)
@@ -269,6 +271,7 @@ contains
  real*8 :: rhs(st_bemv%nd),sol(st_bemv%nd),ztol
  real*8,pointer :: param(:)
  real*8,dimension(:),allocatable :: u,b,u_copy,www,ao
+!dir$ attributes align:64 :: u,b,u_copy,www,ao
  integer*4,pointer :: lpmd(:),lnp(:),lsp(:),lthr(:),lod(:)
  integer :: blocks(2), threads(2)
  1000 format(5(a,i10)/)

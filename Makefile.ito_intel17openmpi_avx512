@@ -1,0 +1,41 @@
+# -*- Makefile -*-
+# Makefile for ito
+#  1) intel/2017
+OPTFLAGS = -qopenmp -O3 -xCORE-AVX512 -DALIGN512
+CC=mpiicc
+F90=mpiifort
+CCFLAGS = $(OPTFLAGS)
+F90FLAGS = $(OPTFLAGS) -fpp -align array64byte
+LDFLAGS = $(OPTFLAGS) -mkl=sequential
+
+LINK=$(F90)
+
+OBJS = HACApK_MAGMA.o HACApK_SOLVER.o \
+       HACApK_lib.o m_ppohBEM_user_func.o m_ppohBEM_matrix_element_ij.o m_HACApK_calc_entry_ij.o \
+       m_HACApK_base.o m_HACApK_solve.o m_HACApK_use.o m_ppohBEM_bembb2hacapk.o bem-bb-fw-HACApK-0.4.2.o
+
+INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include -I$(MPI_DIR)/include
+
+#CCFLAGS += -DISO_C_BINDING
+#F90FLAGS+= -DISO_C_BINDING
+
+CCFLAGS += -DWITHOUT_GPU
+F90FLAGS+= -DWITHOUT_GPU
+
+TARGET=bem-bb-SCM.avx512
+
+.SUFFIXES: .o .c .f90
+
+$(TARGET): $(OBJS) $(CUOBJS)
+	$(LINK) -o $@ $(CUOBJS) $(OBJS) $(LDFLAGS) $(LIBS)
+
+.c.o: *.c
+	$(CC) -c $(CCFLAGS) $(INCS) $<
+.f90.o: *.f90
+	$(F90) -c $< $(F90FLAGS) $(INCS)
+clean:
+	rm -f *.o *.mod
+
+rmod:
+	rm -f m_*.o *.mod
+

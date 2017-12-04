@@ -997,10 +997,18 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
 	nlf=st_leafmtxp->nlf;
 	//fprintf(stderr,"nlf=%d \n",nlf);
 
+#ifndef ALIGN512
 	zaut = (double*)malloc(sizeof(double)*nd);
+#else
+	posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+#endif
 	for(il=0;il<nd;il++)zaut[il]=0.0;
 	//printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
+#ifndef ALIGN512
 	zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
+#else
+	posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+#endif
 	ls = nd;
 	le = 1;
 #pragma omp for
@@ -1235,9 +1243,9 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   nrank = lpmd[1];
   MPI_Barrier( icomm );
 
+#ifndef ALIGN512
   wws = (double*)malloc((*nd) * sizeof(double));
   wwr = (double*)malloc((*nd) * sizeof(double));
-
   zt = (double*)malloc((*nd) * sizeof(double));
   zr = (double*)malloc((*nd) * sizeof(double));
   zp = (double*)malloc((*nd) * sizeof(double));
@@ -1246,6 +1254,18 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   zkt = (double*)malloc((*nd) * sizeof(double));
   zakt= (double*)malloc((*nd) * sizeof(double));
   zshdw = (double*)malloc((*nd) * sizeof(double));
+#else
+  posix_memalign((void**)&wws,   64, (*nd)*sizeof(double));
+  posix_memalign((void**)&wwr,   64, (*nd)*sizeof(double));
+  posix_memalign((void**)&zt,    64, (*nd)*sizeof(double));
+  posix_memalign((void**)&zr,    64, (*nd)*sizeof(double));
+  posix_memalign((void**)&zp,    64, (*nd)*sizeof(double));
+  posix_memalign((void**)&zkp,   64, (*nd)*sizeof(double));
+  posix_memalign((void**)&zakp,  64, (*nd)*sizeof(double));
+  posix_memalign((void**)&zkt,   64, (*nd)*sizeof(double));
+  posix_memalign((void**)&zakt,  64, (*nd)*sizeof(double));
+  posix_memalign((void**)&zshdw, 64, (*nd)*sizeof(double));
+#endif
   // copy matrix to GPU
   //c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
 
