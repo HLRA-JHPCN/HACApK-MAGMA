@@ -2198,6 +2198,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -2217,6 +2218,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -2295,7 +2297,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-	if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
 	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
 	if (beta == zero) {
 #pragma omp parallel for
@@ -2413,6 +2415,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda_
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
+  if(converged==0)step--;
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
     time = en_measure_time - st_measure_time;
@@ -2453,6 +2456,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda2_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -2492,6 +2496,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda2_
 
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -2581,7 +2586,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda2_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-    if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
     // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
     if (beta == zero) {
       //#pragma omp parallel for
@@ -2734,6 +2739,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda2_
       printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
     }
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -2774,6 +2780,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda3_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *blocks, int *threads) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -2816,6 +2823,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda3_
 
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -2911,7 +2919,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda3_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-    if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
     // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
     if (beta == zero) {
       //#pragma omp parallel for
@@ -3066,6 +3074,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda3_
       printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
     }
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -3109,6 +3118,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda4_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -3151,6 +3161,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda4_
 
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -3245,7 +3256,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda4_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-    if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
     // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
     if (beta == zero) {
       //#pragma omp parallel for
@@ -3400,6 +3411,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda4_
       printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
     }
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -3441,6 +3453,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *streams, int *opt, int *merge, int *threads) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -3485,6 +3498,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
 
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -3585,7 +3599,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-    if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
     // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
     if (beta == zero) {
       //#pragma omp parallel for
@@ -3750,6 +3764,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
       printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
     }
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -3824,6 +3839,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -3872,6 +3888,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
 
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -3982,7 +3999,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-    if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
     // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
     if (beta == zero) {
       //#pragma omp parallel for
@@ -4137,6 +4154,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
       printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
     }
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -4202,6 +4220,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda7_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *blocks, int *threads) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -4247,6 +4266,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda7_
   printf("DBG: %e %e %e %e\n",u[0],u[1],u[2],u[3]);
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -4336,7 +4356,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda7_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-    if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
     // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
     if (beta == zero) {
       //#pragma omp parallel for
@@ -4491,6 +4511,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda7_
       printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
     }
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -4541,6 +4562,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda8_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *blocks, int *threads) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -4586,6 +4608,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda8_
   printf("DBG: %e %e %e %e\n",u[0],u[1],u[2],u[3]);
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -4677,7 +4700,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda8_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-    if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
     // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
     if (beta == zero) {
       //#pragma omp parallel for
@@ -4836,6 +4859,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda8_
       printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
     }
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -5012,6 +5036,7 @@ void c_hacapk_bicgstab_cax_lfmtx_warp_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -5031,6 +5056,7 @@ void c_hacapk_bicgstab_cax_lfmtx_warp_
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -5087,7 +5113,7 @@ void c_hacapk_bicgstab_cax_lfmtx_warp_
 	printf( "c_HACApK_bicgstab_cax_lfmtx_warp start\n" );
   }
   for ( step=1; step<=mstep; step++ ) {
-	if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
 	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
 	if (beta == zero) {
 #pragma omp parallel for
@@ -5166,6 +5192,7 @@ void c_hacapk_bicgstab_cax_lfmtx_warp_
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
+  if(converged==0)step--;
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
     time = en_measure_time - st_measure_time;

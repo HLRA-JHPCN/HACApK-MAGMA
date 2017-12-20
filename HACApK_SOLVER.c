@@ -322,6 +322,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2]; 
   nrank = lpmd[1]; 
   MPI_Barrier( icomm );
@@ -837,6 +838,7 @@ void c_hacapk_adot_body_lfdel_magma
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -1339,6 +1341,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -1727,6 +1730,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
   eps = param[90];
+  if(param[98]==1)eps=-1.0;
   mpinr = lpmd[2];
   nrank = lpmd[1];
   MPI_Barrier( icomm );
@@ -1980,6 +1984,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
+  if(param[98]==1)eps=-1.0;
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
     MPI_Barrier( icomm );
@@ -2149,6 +2154,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
+  if(param[98]==1)eps=-1.0;
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
     MPI_Barrier( icomm );
@@ -2364,6 +2370,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
+  if(param[98]==1)eps=-1.0;
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
     MPI_Barrier( icomm );
@@ -2627,6 +2634,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
+  if(param[98]==1)eps=-1.0;
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
     MPI_Barrier( icomm );
@@ -2951,6 +2959,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
     eps = param[90];
+  if(param[98]==1)eps=-1.0;
     mpinr = lpmd[2]; 
     nrank = lpmd[1]; 
     MPI_Barrier( icomm );
