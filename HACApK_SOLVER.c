@@ -302,6 +302,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -371,7 +372,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-	if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
 	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
 	if (beta == zero) {
 	  for(i=0;i<(*nd);i++)zp[i]=zr[i];
@@ -460,6 +461,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 	  printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
 	}
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -694,9 +696,11 @@ void  c_hacapk_adot_body_lfmtx_magma_calc
     // synch to get time
     MPI_Barrier(MPI_COMM_WORLD);
     magma_queue_sync( queue[0] );
+    /*
     if (st_leafmtxp->mpi_rank == 0) {
         printf( " time_gpu: %.2e seconds\n",MPI_Wtime()-tic );
     }
+    */
     // copy back
     magma_dgetvector( st_leafmtxp->m, st_leafmtxp->zau_gpu[0], 1, zau, 1, queue[0] );
     magma_queue_destroy( queue[0] );
@@ -813,6 +817,7 @@ void c_hacapk_adot_body_lfdel_magma
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -881,7 +886,7 @@ void c_hacapk_adot_body_lfdel_magma
 	printf( "c_hacapk_bicgstab_cax_lfmtx_magma start\n" );
   }
   for ( step=1; step<=mstep; step++ ) {
-	if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
 	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
 	if (beta == zero) {
 	  dlacpy_( "F", nd, &ione, zr, nd, zp, nd );
@@ -938,6 +943,7 @@ void c_hacapk_adot_body_lfdel_magma
 	  printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
 	}
   }
+  if(converged==0)step--;
   MPI_Barrier( icomm );
   en_measure_time = MPI_Wtime();
   time = en_measure_time - st_measure_time;
@@ -982,89 +988,89 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
  double *time_batch, double *time_set, double *time_copy, int nd) {
 #pragma omp parallel
   {
-	register int ip,il,it;
-	int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
-	int st_lf_stride = st_leafmtxp->st_lf_stride;
-	size_t a1size;
-	int ith, nths, nthe;
-	double *zaut, *zbut;
-	int ls, le;
-	int i;
+    register int ip,il,it;
+    int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
+    int st_lf_stride = st_leafmtxp->st_lf_stride;
+    size_t a1size;
+    int ith, nths, nthe;
+    double *zaut, *zbut;
+    int ls, le;
+    int i;
 
 #pragma omp for
-	for(i=0;i<nd;i++)zau[i]=0.0;
+    for(i=0;i<nd;i++)zau[i]=0.0;
 
-	nlf=st_leafmtxp->nlf;
-	//fprintf(stderr,"nlf=%d \n",nlf);
+    nlf=st_leafmtxp->nlf;
+    //fprintf(stderr,"nlf=%d \n",nlf);
 
 #ifndef ALIGN512
-	zaut = (double*)malloc(sizeof(double)*nd);
+    zaut = (double*)malloc(sizeof(double)*nd);
 #else
-	posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+    posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
 #endif
-	for(il=0;il<nd;il++)zaut[il]=0.0;
-	//printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
+    for(il=0;il<nd;il++)zaut[il]=0.0;
+    //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
 #ifndef ALIGN512
-	zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
+    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
 #else
-	posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+    posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
 #endif
-	ls = nd;
-	le = 1;
+    ls = nd;
+    le = 1;
 #pragma omp for
-	for(ip=0; ip<nlf; ip++){
-	  //ip=0;{
-	  /**/
-	  stc_HACApK_leafmtx *sttmp;
-	  sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
-	  //fprintf(stderr, "%d: %p\n", ip, sttmp);
-	  /**/
+    for(ip=0; ip<nlf; ip++){
+      //ip=0;{
+      /**/
+      stc_HACApK_leafmtx *sttmp;
+      sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+      //fprintf(stderr, "%d: %p\n", ip, sttmp);
+      /**/
 
-	  ndl   =sttmp->ndl; 
-	  ndt   =sttmp->ndt;
-	  nstrtl=sttmp->nstrtl; 
-	  nstrtt=sttmp->nstrtt;
-	  //fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
-	  if(nstrtl<ls)ls=nstrtl;
-	  if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
-	  //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
-	  if(sttmp->ltmtx==1){
-		/**/
-		double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
-		/**/
-		kt=sttmp->kt;
-		for(il=0;il<kt;il++)zbut[il]=0.0;
-		for(il=0; il<kt; il++){
-		  //zbu[il]=0.0;
-		  for(it=0; it<ndt; it++){
-			itt=it+nstrtt-1;
-			itl=it+il*ndt; 
-			zbut[il] += sttmp->a1[itl]*zu[itt];
-		  }
-		}
-		for(il=0; il<kt; il++){
-		  for(it=0; it<ndl; it++){
-			ill=it+nstrtl-1;
-			itl=it+il*ndl; 
-			zaut[ill] += a2tmp[itl]*zbut[il];
-		  }
-		}
-	  } else if(sttmp->ltmtx==2){
-		for(il=0; il<ndl; il++){
-		  ill=il+nstrtl-1; 
-		  for(it=0; it<ndt; it++){
-			itt=it+nstrtt-1; 
-			itl=it+il*ndt;
-			zaut[ill] += sttmp->a1[itl]*zu[itt];
-		  }
-		}
+      ndl   =sttmp->ndl; 
+      ndt   =sttmp->ndt;
+      nstrtl=sttmp->nstrtl; 
+      nstrtt=sttmp->nstrtt;
+      //fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
+      if(nstrtl<ls)ls=nstrtl;
+      if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
+      //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
+      if(sttmp->ltmtx==1){
+	/**/
+	double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+	/**/
+	kt=sttmp->kt;
+	for(il=0;il<kt;il++)zbut[il]=0.0;
+	for(il=0; il<kt; il++){
+	  //zbu[il]=0.0;
+	  for(it=0; it<ndt; it++){
+	    itt=it+nstrtt-1;
+	    itl=it+il*ndt; 
+	    zbut[il] += sttmp->a1[itl]*zu[itt];
 	  }
 	}
-	for(il=ls-1;il<=le-1;il++){
-#pragma omp atomic
-	  zau[il] += zaut[il];
+	for(il=0; il<kt; il++){
+	  for(it=0; it<ndl; it++){
+	    ill=it+nstrtl-1;
+	    itl=it+il*ndl; 
+	    zaut[ill] += a2tmp[itl]*zbut[il];
+	  }
 	}
-	free(zaut); free(zbut);
+      } else if(sttmp->ltmtx==2){
+	for(il=0; il<ndl; il++){
+	  ill=il+nstrtl-1; 
+	  for(it=0; it<ndt; it++){
+	    itt=it+nstrtt-1; 
+	    itl=it+il*ndt;
+	    zaut[ill] += sttmp->a1[itl]*zu[itt];
+	  }
+	}
+      }
+    }
+    for(il=ls-1;il<=le-1;il++){
+#pragma omp atomic
+      zau[il] += zaut[il];
+    }
+    free(zaut); free(zbut);
   }
 }
 
@@ -1161,6 +1167,99 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc2
   count++;
 }
 
+void  c_hacapk_adot_body_lfmtx_hyp_calc3
+(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+ double *time_batch, double *time_set, double *time_copy, int nd) {
+#pragma omp parallel
+  {
+    register int ip,il,it;
+    int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
+    int st_lf_stride = st_leafmtxp->st_lf_stride;
+    size_t a1size;
+    int ith, nths, nthe;
+    double *zaut, *zbut;
+    int ls, le;
+    int i;
+
+#pragma omp for
+    for(i=0;i<nd;i++)zau[i]=0.0;
+
+    nlf=st_leafmtxp->nlf;
+    //fprintf(stderr,"nlf=%d \n",nlf);
+
+#ifndef ALIGN512
+    zaut = (double*)malloc(sizeof(double)*nd);
+#else
+    posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+#endif
+    for(il=0;il<nd;il++)zaut[il]=0.0;
+    //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
+#ifndef ALIGN512
+    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
+#else
+    posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+#endif
+    ls = nd;
+    le = 1;
+
+    for(ip=0; ip<nlf; ip++){
+      //ip=0;{
+      /**/
+      stc_HACApK_leafmtx *sttmp;
+      sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+      //fprintf(stderr, "%d: %p\n", ip, sttmp);
+      /**/
+
+      ndl   =sttmp->ndl; 
+      ndt   =sttmp->ndt;
+      nstrtl=sttmp->nstrtl; 
+      nstrtt=sttmp->nstrtt;
+      //fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
+      if(nstrtl<ls)ls=nstrtl;
+      if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
+      //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
+      if(sttmp->ltmtx==1){
+	/**/
+	double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+	/**/
+	kt=sttmp->kt;
+	//#pragma omp for
+	//for(il=0;il<kt;il++)zbut[il]=0.0;
+#pragma omp for
+	for(il=0;il<kt; il++){
+	  zbut[il]=0.0;
+	  //zbu[il]=0.0;
+	  for(it=0; it<ndt; it++){
+	    itt=it+nstrtt-1;
+	    itl=it+il*ndt; 
+	    zbut[il] += sttmp->a1[itl]*zu[itt];
+	  }
+	  for(it=0; it<ndl; it++){
+	    ill=it+nstrtl-1;
+	    itl=it+il*ndl; 
+	    zaut[ill] += a2tmp[itl]*zbut[il];
+	  }
+	}
+      } else if(sttmp->ltmtx==2){
+#pragma omp for
+	for(il=0; il<ndl; il++){
+	  ill=il+nstrtl-1; 
+	  for(it=0; it<ndt; it++){
+	    itt=it+nstrtt-1; 
+	    itl=it+il*ndt;
+	    zaut[ill] += sttmp->a1[itl]*zu[itt];
+	  }
+	}
+      }
+    }
+    for(il=ls-1;il<=le-1;il++){
+#pragma omp atomic
+      zau[il] += zaut[il];
+    }
+    free(zaut); free(zbut);
+  }
+}
+
 void c_hacapk_adot_cax_lfmtx_hyp_comm
 (double *zau, stc_HACApK_lcontrol *st_ctl,
  double *wws, double *wwr, int *isct, int *irct, int nd, double *time_mpi) {
@@ -1218,8 +1317,9 @@ void c_hacapk_adot_cax_lfmtx_hyp_comm
 
 void c_hacapk_bicgstab_cax_lfmtx_hyp_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
- double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *lb) {
+ double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *lb, int *omp) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -1289,7 +1389,11 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   tic = MPI_Wtime();
   for(i=0;i<(*nd);i++)zshdw[i]=0.0;
   if(*lb==0){
-    c_hacapk_adot_body_lfmtx_hyp_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
+    if(*omp==0){
+      c_hacapk_adot_body_lfmtx_hyp_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
+    }else{
+      c_hacapk_adot_body_lfmtx_hyp_calc3(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
+    }
   }else{
     //c_hacapk_adot_body_lfmtx_hyp_calc2(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd, st_ctl->lthr);
   }
@@ -1333,7 +1437,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-	if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
 	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
 	if (beta == zero) {
 #pragma omp parallel for
@@ -1359,7 +1463,11 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	//for(i=0;i<(*nd);i++)zakp[i]=0.0;
 	tic = MPI_Wtime();
 	if(*lb==0){
-	  c_hacapk_adot_body_lfmtx_hyp_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
+	  if(*omp==0){
+	    c_hacapk_adot_body_lfmtx_hyp_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
+	  }else{
+	    c_hacapk_adot_body_lfmtx_hyp_calc3(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
+	  }
 	}else{
 	  //c_hacapk_adot_body_lfmtx_hyp_calc2(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd,st_ctl->lthr);
 	}
@@ -1403,7 +1511,11 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	//for(i=0;i<(*nd);i++)zakt[i]=0.0;
 	tic = MPI_Wtime();
 	if(*lb==0){
-	  c_hacapk_adot_body_lfmtx_hyp_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
+	  if(*omp==0){
+	    c_hacapk_adot_body_lfmtx_hyp_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
+	  }else{
+	    c_hacapk_adot_body_lfmtx_hyp_calc3(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
+	  }
 	}else{
 	  //c_hacapk_adot_body_lfmtx_hyp_calc2(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd,st_ctl->lthr);
 	}
@@ -1457,6 +1569,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
+  if(converged==0)step--;
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
     time = en_measure_time - st_measure_time;
@@ -1594,6 +1707,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
  double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
   // local constants
+  int converged = 0;
   int ione = 1;
   double zero =  0.0;
   double one  =  1.0;
@@ -1690,7 +1804,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
   }
   for ( step=1; step<=mstep; step++ ) {
     //for(step=1; step<=1; step++){
-	if (zrnorm/bnorm < eps) break;
+    if(zrnorm/bnorm < eps){converged++; break;}
 	// zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
 	if (beta == zero) {
 #pragma omp parallel for
@@ -1806,6 +1920,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
+  if(converged==0)step--;
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
     time = en_measure_time - st_measure_time;
@@ -1845,6 +1960,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
 void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
                                        double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
     // local constants
+  int converged = 0;
     int ione = 1;
     double zero =  0.0;
     double one  =  1.0;
@@ -1911,7 +2027,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         printf( "HACApK_bicgstab_lfmtx_flat start\n" );
     }
     for ( step=1; step<=mstep; step++ ) {
-        if (zrnorm/bnorm < eps) break;
+      if(zrnorm/bnorm < eps){converged++; break;}
         // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
         if (beta == zero) {
             lapackf77_dlacpy( "F", nd, &ione, zr, nd, zp, nd );
@@ -1968,6 +2084,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
+  if(converged==0)step--;
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
     time = en_measure_time - st_measure_time;
@@ -2011,6 +2128,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
                                       double *u_cpu, double *b_cpu, double*param, int *nd, int *nstp, int *lrtrn) {
     // local constants
+  int converged = 0;
     int ione = 1;
     double zero =  0.0;
     double one  =  1.0;
@@ -2106,7 +2224,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
         printf( "HACApK_bicgstab_lfmtx_gpu start\n" );
     }
     for ( step=1; step<=mstep; step++ ) {
-        if (zrnorm/bnorm < eps) break;
+      if(zrnorm/bnorm < eps){converged++; break;}
         // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
         if (beta == zero) {
             magmablas_dlacpy( MagmaFull, *nd, ione, zr, *nd, zp, *nd, queue );
@@ -2171,6 +2289,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
+  if(converged==0)step--;
     magma_dgetvector( *nd, u, 1, u_cpu, 1, queue );
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
@@ -2226,6 +2345,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
 void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
                                        double *u_cpu, double *b_cpu, double*param, int *nd, int *nstp, int *lrtrn) {
     // local constants
+  int converged = 0;
     int ione = 1;
     double zero =  0.0;
     double one  =  1.0;
@@ -2349,7 +2469,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         printf( "HACApK_bicgstab_lfmtx_mgpu start\n" );
     }
     for ( step=1; step<=mstep; step++ ) {
-        if (zrnorm/bnorm < eps) break;
+      if(zrnorm/bnorm < eps){converged++; break;}
         // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
         if (beta == zero) {
             magmablas_dlacpy( MagmaFull, *nd, ione, zr, *nd, zp, *nd, queue[0] );
@@ -2423,6 +2543,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
+  if(converged==0)step--;
     magma_dgetvector( *nd, u, 1, u_cpu, 1, queue[0] );
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
@@ -2487,6 +2608,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
                                         double *u_cpu, double *b_cpu, double*param, int *nd, int *nstp, int *lrtrn) {
     // local constants
+  int converged = 0;
     int ione = 1;
     double zero =  0.0;
     double one  =  1.0;
@@ -2624,7 +2746,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
         printf( "HACApK_bicgstab_lfmtx_mgpu2 start\n" );
     }
     for ( step=1; step<=mstep; step++ ) {
-        if (zrnorm/bnorm < eps) break;
+  if(zrnorm/bnorm < eps){converged++; break;}
         // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zakp(:nd))
         for (d=0; d<gpus_per_proc; d++) {
             magma_setdevice((gpu_id+d)%procs_per_node);
@@ -2728,6 +2850,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
             printf( " %d: time=%.2e log10(zrnorm/bnorm)=log10(%.2e/%.2e)=%.2e\n",step,time,zrnorm,bnorm,log10(zrnorm/bnorm) );
         }
     }
+  if(converged==0)step--;
     magma_dgetvector( *nd, u[0], 1, u_cpu, 1, queue[0] );
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();
@@ -2805,6 +2928,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
 void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
                                        double *u_cpu, double *b_cpu, double*param, int *nd, int *nstp, int *lrtrn) {
     // local constants
+  int converged = 0;
     int ione = 1;
     double zero =  0.0;
     double one  =  1.0;
@@ -2935,7 +3059,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         printf( "HACApK_bicgstab_lfmtx_pipe start\n" );
     }
     for ( step=1; step<=mstep; step++ ) {
-        if (zrnorm/bnorm < eps) break;
+  if(zrnorm/bnorm < eps){converged++; break;}
         if (step > 1) { 
             // zp(:nd) = zr(:nd) + beta*(zp(:nd) - zeta*zs(:nd))
             magma_daxpy( *nd, -zeta, zs, ione, zp, ione, queue );
@@ -3018,6 +3142,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
                                          wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue);
     }
+  if(converged==0)step--;
     magma_dgetvector( *nd, u, 1, u_cpu, 1, queue );
     MPI_Barrier( icomm );
     en_measure_time = MPI_Wtime();

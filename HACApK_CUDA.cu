@@ -94,12 +94,79 @@ __global__ void cuda_matvec_a1_2_smo
     }
   }
 }
+template <int THREADS_PER_BLOCK>
+__global__ void cuda_matvec_a1_2_smo_0
+(int kt, int ndt, int nstrtt, double *d_zbut, double *d_zu, double *d_mat, int head)
+{
+  int il, it, itt, itl;
+  int gid = blockIdx.x;
+  int glen = gridDim.x;
+  int tid = threadIdx.x;
+  int tlen = blockDim.x;
+  double tmp=0.0;
+  __shared__ double smTmp[THREADS_PER_BLOCK*2];
+  //for(il=gid; il<kt; il+=glen)
+  il=gid;
+  {
+    tmp = 0.0;
+    for(it=tid; it<ndt; it+=tlen){
+      itt=it+nstrtt-1;
+      itl=it+il*ndt;
+      tmp += d_mat[head+itl]*d_zu[itt];
+    }
+    smTmp[tid] = tmp;
+    smTmp[tid+tlen] = 0.0;
+    __syncthreads();
+    if(THREADS_PER_BLOCK > 512){    if(tid<512)smTmp[tid] = tmp = tmp + smTmp[tid+512];    __syncthreads();  }
+    if(THREADS_PER_BLOCK > 256){    if(tid<256)smTmp[tid] = tmp = tmp + smTmp[tid+256];    __syncthreads();  }
+    if(THREADS_PER_BLOCK > 128){    if(tid<128)smTmp[tid] = tmp = tmp + smTmp[tid+128];    __syncthreads();  }
+    if(THREADS_PER_BLOCK >  64){    if(tid< 64)smTmp[tid] = tmp = tmp + smTmp[tid+ 64];    __syncthreads();  }
+    if(THREADS_PER_BLOCK >  32){    if(tid< 32)smTmp[tid] = tmp = tmp + smTmp[tid+ 32];    __syncthreads();  }
+    if(tid<32){
+      for (int offset = warpSize/2; offset > 0; offset /= 2){
+	tmp += __shfl_down(tmp, offset);
+      }
+    }
+    if(tid==0){
+      //atomicAdd(&d_zbut[il], tmp);
+      d_zbut[il] = tmp;
+    }
+  }
+}
 __global__ void cuda_matvec_a1_3_smo
 (int kt, int ndt, int nstrtt, double *d_zbut, double *d_zu, double *d_mat, int head)
 { // 128threads = 32(=1warp) * 4pairs
   int il, it, itt, itl;
   int wid = threadIdx.x/32;
   int wlen = 4;
+  int tid = threadIdx.x;
+  int tlen = blockDim.x;
+  int xid = threadIdx.x%32;
+  int xlen = 32;
+  double tmp=0.0;
+  for(il=wid; il<kt; il+=wlen){
+    tmp = 0.0;
+    for(it=xid; it<ndt; it+=xlen){
+      itt=it+nstrtt-1;
+      itl=it+il*ndt; 
+      tmp += d_mat[head+itl]*d_zu[itt];
+    }
+    //__syncthreads();
+    for (int offset = warpSize/2; offset > 0; offset /= 2){
+      tmp += __shfl_down(tmp, offset);
+    }
+    if(xid==0){
+      //atomicAdd(&d_zbut[il], tmp);
+      d_zbut[il] = tmp;
+    }
+  }
+}
+__global__ void cuda_matvec_a1_3_smo_2
+(int kt, int ndt, int nstrtt, double *d_zbut, double *d_zu, double *d_mat, int head)
+{ // 128threads = 32(=1warp) * 4pairs * N set
+  int il, it, itt, itl;
+  int wid = threadIdx.x/32;
+  int wlen = blockDim.x/32; // 4
   int tid = threadIdx.x;
   int tlen = blockDim.x;
   int xid = threadIdx.x%32;
@@ -129,6 +196,44 @@ __global__ void cuda_matvec_a12_3_smo
   int il, it, itt, itl, ill;
   int wid = threadIdx.x/32;
   int wlen = 4;
+  int tid = threadIdx.x;
+  int tlen = blockDim.x;
+  int xid = threadIdx.x%32;
+  int xlen = 32;
+  double tmp=0.0;
+  extern __shared__ double tmpbut[];
+  for(il=wid; il<kt; il+=wlen){
+    tmp = 0.0;
+    for(it=xid; it<ndt; it+=xlen){
+      itt=it+nstrtt-1;
+      itl=it+il*ndt; 
+      tmp += d_mat[a1+itl]*d_zu[itt];
+    }
+    for (int offset = warpSize/2; offset > 0; offset /= 2){
+      tmp += __shfl_down(tmp, offset);
+    }
+    if(xid==0)tmpbut[il] = tmp;
+  }
+  __syncthreads();
+  for(it=wid; it<ndl; it+=wlen){
+    tmp = 0.0;
+    ill=it+nstrtl-1;
+    for(il=xid; il<kt; il+=xlen){
+      itl=it+il*ndl; 
+      tmp += d_mat[a2+itl]*tmpbut[il];
+    }
+    for (int offset = warpSize/2; offset > 0; offset /= 2){
+      tmp += __shfl_down(tmp, offset);
+    }
+    if(xid==0)atomicAdd(&d_zaut[ill], tmp);
+  }
+}
+__global__ void cuda_matvec_a12_3_smo_2
+(int ndt, int ndl, int kt, int nstrtt, int nstrtl, double *d_zaut, double *d_mat, double *d_zu, int a1, int a2)
+{ // 128threads = 32(=1warp) * 4pairs * N set
+  int il, it, itt, itl, ill;
+  int wid = threadIdx.x/32;
+  int wlen = blockDim.x/32; //4;
   int tid = threadIdx.x;
   int tlen = blockDim.x;
   int xid = threadIdx.x%32;
@@ -265,12 +370,79 @@ __global__ void cuda_matvec_a2_2b_smo
     }
   }
 }
+template <int THREADS_PER_BLOCK>
+__global__ void cuda_matvec_a2_2b_smo_0
+(int kt, int ndl, int nstrtl, double *d_zaut, double *d_zbut, double *d_mat, size_t head)
+{
+  int il, it, ill, itl;
+  int gid = blockIdx.x;
+  int glen = gridDim.x;
+  int tid = threadIdx.x;
+  int tlen = blockDim.x;
+  double tmp=0.0;
+  __shared__ double smTmp[THREADS_PER_BLOCK*2];
+  //for(it=gid; it<ndl; it+=glen)
+  it=gid;
+  {
+    tmp = 0.0;
+    ill=it+nstrtl-1;
+    for(il=tid; il<kt; il+=tlen){
+      itl=it+il*ndl; 
+      tmp += d_mat[head+itl]*d_zbut[il];
+    }
+    smTmp[tid] = tmp;
+    smTmp[tid+tlen] = 0.0;
+    __syncthreads();
+    if(THREADS_PER_BLOCK > 512){    if(tid<512)smTmp[tid] = tmp = tmp + smTmp[tid+512];    __syncthreads();  }
+    if(THREADS_PER_BLOCK > 256){    if(tid<256)smTmp[tid] = tmp = tmp + smTmp[tid+256];    __syncthreads();  }
+    if(THREADS_PER_BLOCK > 128){    if(tid<128)smTmp[tid] = tmp = tmp + smTmp[tid+128];    __syncthreads();  }
+    if(THREADS_PER_BLOCK >  64){    if(tid< 64)smTmp[tid] = tmp = tmp + smTmp[tid+ 64];    __syncthreads();  }
+    if(THREADS_PER_BLOCK >  32){    if(tid< 32)smTmp[tid] = tmp = tmp + smTmp[tid+ 32];    __syncthreads();  }
+    if(tid<32){
+      for (int offset = warpSize/2; offset > 0; offset /= 2){
+	tmp += __shfl_down(tmp, offset);
+      }
+    }
+    if(tid==0){
+      atomicAdd(&d_zaut[ill], tmp);
+      //d_zaut[ill] += tmp;
+    }
+  }
+}
 __global__ void cuda_matvec_a2_3_smo
 (int kt, int ndl, int nstrtl, double *d_zaut, double *d_zbut, double *d_mat, size_t head)
 {
   int il, it, ill, itl;
   int wid = threadIdx.x/32;
   int wlen = 4;
+  int tid = threadIdx.x;
+  int tlen = blockDim.x;
+  int xid = threadIdx.x%32;
+  int xlen = 32;
+  double tmp=0.0;
+  for(it=wid; it<ndl; it+=wlen){
+    tmp = 0.0;
+    ill=it+nstrtl-1;
+    for(il=xid; il<kt; il+=xlen){
+      itl=it+il*ndl; 
+      tmp += d_mat[head+itl]*d_zbut[il];
+    }
+    //__syncthreads();
+    for (int offset = warpSize/2; offset > 0; offset /= 2){
+      tmp += __shfl_down(tmp, offset);
+    }
+    if(xid==0){
+      atomicAdd(&d_zaut[ill], tmp);
+      //d_zaut[ill] += tmp;
+    }
+  }
+}
+__global__ void cuda_matvec_a2_3_smo_2
+(int kt, int ndl, int nstrtl, double *d_zaut, double *d_zbut, double *d_mat, size_t head)
+{
+  int il, it, ill, itl;
+  int wid = threadIdx.x/32;
+  int wlen = blockDim.x/32; //4;
   int tid = threadIdx.x;
   int tlen = blockDim.x;
   int xid = threadIdx.x%32;
@@ -383,12 +555,81 @@ __global__ void cuda_matvec_s_2_smo
     }
   }
 }
+template <int THREADS_PER_BLOCK>
+__global__ void cuda_matvec_s_2_smo_0
+(int ndl, int ndt, int nstrtl, int nstrtt, double *d_zaut, double *d_zu, double *d_mat, size_t head)
+{
+  int il, it, ill, itt, itl;
+  int gid = blockIdx.x;
+  int glen = gridDim.x;
+  int tid = threadIdx.x;
+  int tlen = blockDim.x;
+  double tmp=0.0;
+  __shared__ double smTmp[THREADS_PER_BLOCK*2];
+  //for(il=gid; il<ndl; il+=glen)
+  il=gid;
+  {
+    tmp = 0.0;
+    ill=il+nstrtl-1;
+    for(it=tid; it<ndt; it+=tlen){
+      itt=it+nstrtt-1; 
+      itl=it+il*ndt;
+      tmp += d_mat[head+itl]*d_zu[itt];
+    }
+    smTmp[tid] = tmp;
+    smTmp[tid+tlen] = 0.0;
+    __syncthreads();
+    if(THREADS_PER_BLOCK > 512){    if(tid<512)smTmp[tid] = tmp = tmp + smTmp[tid+512];    __syncthreads();  }
+    if(THREADS_PER_BLOCK > 256){    if(tid<256)smTmp[tid] = tmp = tmp + smTmp[tid+256];    __syncthreads();  }
+    if(THREADS_PER_BLOCK > 128){    if(tid<128)smTmp[tid] = tmp = tmp + smTmp[tid+128];    __syncthreads();  }
+    if(THREADS_PER_BLOCK >  64){    if(tid< 64)smTmp[tid] = tmp = tmp + smTmp[tid+ 64];    __syncthreads();  }
+    if(THREADS_PER_BLOCK >  32){    if(tid< 32)smTmp[tid] = tmp = tmp + smTmp[tid+ 32];    __syncthreads();  }
+    if(tid<32){
+      for (int offset = warpSize/2; offset > 0; offset /= 2){
+	tmp += __shfl_down(tmp, offset);
+      }
+    }
+    if(tid==0){
+      atomicAdd(&d_zaut[ill], tmp);
+      //d_zaut[ill] += tmp;
+    }
+  }
+}
 __global__ void cuda_matvec_s_3_smo
 (int ndl, int ndt, int nstrtl, int nstrtt, double *d_zaut, double *d_zu, double *d_mat, size_t head)
 {
   int il, it, ill, itt, itl;
   int wid = threadIdx.x/32;
   int wlen = 4;
+  int tid = threadIdx.x;
+  int tlen = blockDim.x;
+  int xid = threadIdx.x%32;
+  int xlen = 32;
+  double tmp=0.0;
+  for(il=wid; il<ndl; il+=wlen){
+    tmp = 0.0;
+    ill=il+nstrtl-1;
+    for(it=xid; it<ndt; it+=xlen){
+      itt=it+nstrtt-1; 
+      itl=it+il*ndt;
+      tmp += d_mat[head+itl]*d_zu[itt];
+    }
+    __syncthreads();
+    for (int offset = warpSize/2; offset > 0; offset /= 2){
+      tmp += __shfl_down(tmp, offset);
+    }
+    if(xid==0){
+      atomicAdd(&d_zaut[ill], tmp);
+      //d_zaut[ill] += tmp;
+    }
+  }
+}
+__global__ void cuda_matvec_s_3_smo_2
+(int ndl, int ndt, int nstrtl, int nstrtt, double *d_zaut, double *d_zu, double *d_mat, size_t head)
+{
+  int il, it, ill, itt, itl;
+  int wid = threadIdx.x/32;
+  int wlen = blockDim.x/32;
   int tid = threadIdx.x;
   int tlen = blockDim.x;
   int xid = threadIdx.x%32;
@@ -945,7 +1186,7 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device
 
 void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
- double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo, double *d_mat) {
+ double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo, double *d_mat, int nb, int nt) {
   register int ip,il,it;
   int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
   int st_lf_stride = st_leafmtxp->st_lf_stride;
@@ -997,7 +1238,29 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
       //for(il=0;il<kt;il++)zbut[il]=0.0;
       //cudaMemcpy(d_zbut, zbut, sizeof(double)*kt, cudaMemcpyHostToDevice);
       //cudaMemset(d_zbut, 0.0, sizeof(double)*kt);
-      cuda_matvec_a1_2_smo<128><<<112,128>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1);
+      if(nb==0){
+	switch(nt){
+	case  32: cuda_matvec_a1_2_smo_0< 32><<<kt,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case  64: cuda_matvec_a1_2_smo_0< 64><<<kt,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case  96: cuda_matvec_a1_2_smo_0< 96><<<kt,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 128: cuda_matvec_a1_2_smo_0<128><<<kt,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 160: cuda_matvec_a1_2_smo_0<160><<<kt,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 192: cuda_matvec_a1_2_smo_0<192><<<kt,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 224: cuda_matvec_a1_2_smo_0<224><<<kt,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 256: cuda_matvec_a1_2_smo_0<256><<<kt,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	}
+      }else{
+	switch(nt){
+	case  32: cuda_matvec_a1_2_smo< 32><<<nb,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case  64: cuda_matvec_a1_2_smo< 64><<<nb,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case  96: cuda_matvec_a1_2_smo< 96><<<nb,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 128: cuda_matvec_a1_2_smo<128><<<nb,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 160: cuda_matvec_a1_2_smo<160><<<nb,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 192: cuda_matvec_a1_2_smo<192><<<nb,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 224: cuda_matvec_a1_2_smo<224><<<nb,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	case 256: cuda_matvec_a1_2_smo<256><<<nb,nt>>>(kt,ndt,nstrtt,d_zbut,zu, d_mat, smo[ip].a1); break;
+	}
+      }
       /*
 	for(il=0; il<kt; il++){
 	  for(it=0; it<ndt; it++){
@@ -1007,7 +1270,29 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
 	  }
 	}
       */
-      cuda_matvec_a2_2b_smo<128><<<112,128>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2);
+      if(nb==0){
+	switch(nt){
+	case  32: cuda_matvec_a2_2b_smo_0< 32><<<ndl,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case  64: cuda_matvec_a2_2b_smo_0< 64><<<ndl,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case  96: cuda_matvec_a2_2b_smo_0< 96><<<ndl,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 128: cuda_matvec_a2_2b_smo_0<128><<<ndl,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 160: cuda_matvec_a2_2b_smo_0<160><<<ndl,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 192: cuda_matvec_a2_2b_smo_0<192><<<ndl,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 224: cuda_matvec_a2_2b_smo_0<224><<<ndl,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 256: cuda_matvec_a2_2b_smo_0<256><<<ndl,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	}
+      }else{
+	switch(nt){
+	case  32: cuda_matvec_a2_2b_smo< 32><<<nb,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case  64: cuda_matvec_a2_2b_smo< 64><<<nb,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case  96: cuda_matvec_a2_2b_smo< 96><<<nb,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 128: cuda_matvec_a2_2b_smo<128><<<nb,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 160: cuda_matvec_a2_2b_smo<160><<<nb,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 192: cuda_matvec_a2_2b_smo<192><<<nb,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 224: cuda_matvec_a2_2b_smo<224><<<nb,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	case 256: cuda_matvec_a2_2b_smo<256><<<nb,nt>>>(kt,ndl,nstrtl,d_zaut,d_zbut, d_mat, smo[ip].a2); break;
+	}
+      }
       /*
 	for(il=0; il<kt; il++){
 	  for(it=0; it<ndl; it++){
@@ -1018,7 +1303,29 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
 	}
       */
     } else if(sttmp->ltmtx==2){
-      cuda_matvec_s_2_smo<128><<<112,128>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1);
+      if(nb==0){
+	switch(nt){
+	case  32: cuda_matvec_s_2_smo_0< 32><<<ndl,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case  64: cuda_matvec_s_2_smo_0< 64><<<ndl,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case  96: cuda_matvec_s_2_smo_0< 96><<<ndl,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 128: cuda_matvec_s_2_smo_0<128><<<ndl,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 160: cuda_matvec_s_2_smo_0<160><<<ndl,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 192: cuda_matvec_s_2_smo_0<192><<<ndl,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 224: cuda_matvec_s_2_smo_0<224><<<ndl,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 256: cuda_matvec_s_2_smo_0<256><<<ndl,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	}
+      }else{
+	switch(nt){
+	case  32: cuda_matvec_s_2_smo< 32><<<nb,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case  64: cuda_matvec_s_2_smo< 64><<<nb,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case  96: cuda_matvec_s_2_smo< 96><<<nb,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 128: cuda_matvec_s_2_smo<128><<<nb,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 160: cuda_matvec_s_2_smo<160><<<nb,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 192: cuda_matvec_s_2_smo<192><<<nb,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 224: cuda_matvec_s_2_smo<224><<<nb,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	case 256: cuda_matvec_s_2_smo<256><<<nb,nt>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+	}
+      }
       /*
 	for(il=0; il<ndl; il++){
 	  ill=il+nstrtl-1; 
@@ -1141,7 +1448,7 @@ void  c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_1blk
 void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
  double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo, double *d_mat,
- cudaStream_t *s, int streams, double *d_zaut, double **d_zbut) {
+ cudaStream_t *s, int streams, double *d_zaut, double **d_zbut, int nt) {
   register int ip,il,it;
   int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
   int st_lf_stride = st_leafmtxp->st_lf_stride;
@@ -1166,10 +1473,51 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
     if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
     if(sttmp->ltmtx==1){
       kt=sttmp->kt;
-      cuda_matvec_a1_2_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
-      cuda_matvec_a2_2b_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+      switch(nt){
+      case  32:
+	cuda_matvec_a1_2_smo< 32><<<1, 32,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_2b_smo< 32><<<1, 32,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case  64:
+	cuda_matvec_a1_2_smo< 64><<<1, 64,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_2b_smo< 64><<<1, 64,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case  96:
+	cuda_matvec_a1_2_smo< 96><<<1, 96,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_2b_smo< 96><<<1, 96,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 128:
+	cuda_matvec_a1_2_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_2b_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 160:
+	cuda_matvec_a1_2_smo<160><<<1,160,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_2b_smo<160><<<1,160,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 192:
+	cuda_matvec_a1_2_smo<192><<<1,192,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_2b_smo<192><<<1,192,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 224:
+	cuda_matvec_a1_2_smo<224><<<1,224,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_2b_smo<224><<<1,224,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 256:
+	cuda_matvec_a1_2_smo<256><<<1,256,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_2b_smo<256><<<1,256,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      }
     } else if(sttmp->ltmtx==2){
-      cuda_matvec_s_2_smo<128><<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1);
+      switch(nt){
+      case  32:	cuda_matvec_s_2_smo< 32><<<1, 32,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+      case  64:	cuda_matvec_s_2_smo< 64><<<1, 64,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+      case  96:	cuda_matvec_s_2_smo< 96><<<1, 96,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+      case 128:	cuda_matvec_s_2_smo<128><<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+      case 160:	cuda_matvec_s_2_smo<160><<<1,160,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+      case 192:	cuda_matvec_s_2_smo<192><<<1,192,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+      case 224:	cuda_matvec_s_2_smo<224><<<1,224,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+      case 256:	cuda_matvec_s_2_smo<256><<<1,256,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1); break;
+      }
     }
   }
   cudaThreadSynchronize();
@@ -1181,7 +1529,7 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
 void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
  double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo, double *d_mat,
- cudaStream_t *s, int streams, double *d_zaut, double **d_zbut) {
+ cudaStream_t *s, int streams, double *d_zaut, double **d_zbut, int nt) {
   register int ip,il,it;
   int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
   int st_lf_stride = st_leafmtxp->st_lf_stride;
@@ -1206,12 +1554,55 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
     if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
     if(sttmp->ltmtx==1){
       kt=sttmp->kt;
-      cuda_matvec_a1_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
-      //cuda_matvec_a2_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
-      cuda_matvec_a2_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+      //cuda_matvec_a1_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+      ////cuda_matvec_a2_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,d_zaut,d_zbut[ip%streams], d_mat, smo[ip].a2);
+      //cuda_matvec_a2_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+      switch(nt){
+      case  32:
+	cuda_matvec_a1_3_smo< 32><<<1, 32,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo< 32><<<1, 32,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case  64:
+	cuda_matvec_a1_3_smo< 64><<<1, 64,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo< 64><<<1, 64,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case  96:
+	cuda_matvec_a1_3_smo< 96><<<1, 96,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo< 96><<<1, 96,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 128:
+	cuda_matvec_a1_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo<128><<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 160:
+	cuda_matvec_a1_3_smo<160><<<1,160,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo<160><<<1,160,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 192:
+	cuda_matvec_a1_3_smo<192><<<1,192,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo<192><<<1,192,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 224:
+	cuda_matvec_a1_3_smo<224><<<1,224,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo<224><<<1,224,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      case 256:
+	cuda_matvec_a1_3_smo<256><<<1,256,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo<256><<<1,256,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	break;
+      }
     } else if(sttmp->ltmtx==2){
       //cuda_matvec_s_3_smo<128><<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,d_zaut,zu, d_mat, smo[ip].a1);
-      cuda_matvec_s_3_smo<128><<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1);
+      switch(nt){
+      case  32: cuda_matvec_s_3_smo< 32><<<1, 32,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1); break;
+      case  64: cuda_matvec_s_3_smo< 64><<<1, 64,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1); break;
+      case  96: cuda_matvec_s_3_smo< 96><<<1, 96,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1); break;
+      case 128: cuda_matvec_s_3_smo<128><<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1); break;
+      case 160: cuda_matvec_s_3_smo<160><<<1,160,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1); break;
+      case 192: cuda_matvec_s_3_smo<192><<<1,192,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1); break;
+      case 224: cuda_matvec_s_3_smo<224><<<1,224,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1); break;
+      case 256: cuda_matvec_s_3_smo<256><<<1,256,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1); break;
+      }
     }
   }
   cudaThreadSynchronize();
@@ -1223,7 +1614,7 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
 void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
  double *time_batch, double *time_set, double *time_copy, int nd, struct stc_matrixoffset *smo, double *d_mat,
- cudaStream_t *s, int streams, double *d_zaut, double **d_zbut, int merge) {
+ cudaStream_t *s, int streams, double *d_zaut, double **d_zbut, int merge, int nt) {
   register int ip,il,it;
   int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
   int st_lf_stride = st_leafmtxp->st_lf_stride;
@@ -1249,14 +1640,14 @@ void c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
     if(sttmp->ltmtx==1){
       kt=sttmp->kt;
       if(merge==0){
-	cuda_matvec_a1_3_smo<<<1,128,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
-	cuda_matvec_a2_3_smo<<<1,128,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
+	cuda_matvec_a1_3_smo_2<<<1,nt,0,s[ip%streams]>>>(kt,ndt,nstrtt,d_zbut[ip%streams],zu, d_mat, smo[ip].a1);
+	cuda_matvec_a2_3_smo_2<<<1,nt,0,s[ip%streams]>>>(kt,ndl,nstrtl,zau,d_zbut[ip%streams], d_mat, smo[ip].a2);
       }else{
-	cuda_matvec_a12_3_smo<<<1,128,st_leafmtxp->ktmax*sizeof(double),s[ip%streams]>>>
+	cuda_matvec_a12_3_smo_2<<<1,nt,st_leafmtxp->ktmax*sizeof(double),s[ip%streams]>>>
 	  (ndt,ndl,kt,nstrtt,nstrtl,zau,d_mat,zu,smo[ip].a1,smo[ip].a2);
       }
     } else if(sttmp->ltmtx==2){
-      cuda_matvec_s_3_smo<<<1,128,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1);
+      cuda_matvec_s_3_smo_2<<<1,nt,0,s[ip%streams]>>>(ndl,ndt,nstrtl,nstrtt,zau,zu, d_mat, smo[ip].a1);
     }
   }
   cudaThreadSynchronize();
@@ -2381,7 +2772,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda2_
 extern "C"
 void c_hacapk_bicgstab_cax_lfmtx_cuda3_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
- double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn) {
+ double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *blocks, int *threads) {
   // local constants
   int ione = 1;
   double zero =  0.0;
@@ -2472,7 +2863,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda3_
   //for(i=0;i<(*nd);i++)zshdw[i]=0.0;
   //c_hacapk_adot_body_lfmtx_cuda_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
   c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
-    (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat);
+    (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, *blocks, *threads);
   cudaThreadSynchronize();
   /*
   {
@@ -2552,7 +2943,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda3_
     tic = MPI_Wtime();
     //c_hacapk_adot_body_lfmtx_cuda_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
     c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
-      (d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat);
+      (d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, *blocks, *threads);
     cudaThreadSynchronize();
     time_spmv += (MPI_Wtime()-tic);
     /*
@@ -2603,7 +2994,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda3_
     tic = MPI_Wtime();
     //c_hacapk_adot_body_lfmtx_cuda_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
     c_hacapk_adot_body_lfmtx_cuda_calc_device_smo
-      (d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat);
+      (d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, *blocks, *threads);
     cudaThreadSynchronize();
     time_spmv += (MPI_Wtime()-tic);
     //c_hacapk_adot_cax_lfmtx_cuda_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
@@ -2682,13 +3073,15 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda3_
     //printf( " End: %d, %.2e\n",mpinr,time );
     for(i=0;i<nrank;i++){
       if(i==mpinr){
-	printf( "C-CUDA3  %d  BiCG        = %.5e\n", i, time );
-	printf( "C-CUDA3  %d  time_mpi    = %.5e\n", i, time_mpi );
-	printf( "C-CUDA3  %d  time_matvec = %.5e\n", i, time_spmv );
-	printf( "C-CUDA3  %d  >time_copy  = %.5e\n", i, time_copy );
-	printf( "C-CUDA3  %d  >time_set   = %.5e\n", i, time_set );
-	printf( "C-CUDA3  %d  >time_batch = %.5e\n", i, time_batch );
-	printf( "C-CUDA3  %d  iteration   = %d\n", i, step );
+	char str[32];
+	snprintf(str, 32, "C-CUDA3(simple-%d-%d)", (*blocks), (*threads));
+	printf( "%s  %d  BiCG        = %.5e\n", str, i, time );
+	printf( "%s  %d  time_mpi    = %.5e\n", str, i, time_mpi );
+	printf( "%s  %d  time_matvec = %.5e\n", str, i, time_spmv );
+	printf( "%s  %d  >time_copy  = %.5e\n", str, i, time_copy );
+	printf( "%s  %d  >time_set   = %.5e\n", str, i, time_set );
+	printf( "%s  %d  >time_batch = %.5e\n", str, i, time_batch );
+	printf( "%s  %d  iteration   = %d\n", str, i, step );
       }
       MPI_Barrier( icomm );
     }
@@ -3046,7 +3439,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda4_
 extern "C"
 void c_hacapk_bicgstab_cax_lfmtx_cuda5_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
- double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *streams, int *opt, int *merge) {
+ double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *streams, int *opt, int *merge, int *threads) {
   // local constants
   int ione = 1;
   double zero =  0.0;
@@ -3153,10 +3546,10 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
   //c_hacapk_adot_body_lfmtx_cuda_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
   if(*opt==0){
     c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
-      (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
+      (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *threads);
   }else{
     c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
-      (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *merge);
+      (d_zshdw,st_leafmtxp,d_u, wws,&time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *merge, *threads);
   }
   cudaThreadSynchronize();
   time_spmv += (MPI_Wtime()-tic);
@@ -3225,10 +3618,10 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
     //c_hacapk_adot_body_lfmtx_cuda_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
     if(*opt==0){
       c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
-	(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
+	(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *threads);
     }else{
       c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
-	(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *merge);
+	(d_zakp,st_leafmtxp,d_zkp,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *merge, *threads);
     }
     cudaThreadSynchronize();
     time_spmv += (MPI_Wtime()-tic);
@@ -3281,10 +3674,10 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
     //c_hacapk_adot_body_lfmtx_cuda_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
     if(*opt==0){
       c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async
-	(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut);
+	(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *threads);
     }else{
       c_hacapk_adot_body_lfmtx_cuda_calc_device_smo_async2
-	(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *merge);
+	(d_zakt,st_leafmtxp,d_zkt,wws, &time_batch,&time_set,&time_copy,*nd, smo, d_mat, s, *streams, d_zaut, d_zbut, *merge, *threads);
     }
     cudaThreadSynchronize();
     time_spmv += (MPI_Wtime()-tic);
@@ -3365,7 +3758,15 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda5_
     for(i=0;i<nrank;i++){
       if(i==mpinr){
 	char str[32];
-	if(*opt==0)snprintf(str,32,"C-CUDA5(async)");else snprintf(str,32,"C-CUDA5a(async)");
+	if(*opt==0){
+	  snprintf(str,32,"C-CUDA5(async-%d)", *threads);
+	}else{
+	  if(*merge==0){
+	    snprintf(str,32,"C-CUDA5a(async2-%d)", *threads);
+	  }else{
+	    snprintf(str,32,"C-CUDA5a(asyncM-%d)", *threads);
+	  }
+	}
 	printf( "%s  %d  BiCG           = %.5e\n", str, i, time );
 	printf( "%s  %d  time_mpi       = %.5e\n", str, i, time_mpi );
 	printf( "%s  %d  time_matvec    = %.5e\n", str, i, time_spmv );
@@ -4098,7 +4499,6 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda7_
     for(i=0;i<nrank;i++){
       if(i==mpinr){
 	char str[32];
-	int bkl;
 	switch((*blocks)){
 	case -1: snprintf(str, 32, "C-CUDA7(1kernel-A-%d)", (*threads)); break;
 	case -2: snprintf(str, 32, "C-CUDA7(1kernel-B-%d)", (*threads)); break;
