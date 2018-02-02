@@ -1005,17 +1005,21 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
     nlf=st_leafmtxp->nlf;
     //fprintf(stderr,"nlf=%d \n",nlf);
 
-#ifndef ALIGN512
-    zaut = (double*)malloc(sizeof(double)*nd);
-#else
+#if defined(ALIGN512)
     posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zaut, 32, sizeof(double)*nd);
+#else
+    zaut = (double*)malloc(sizeof(double)*nd);
 #endif
     for(il=0;il<nd;il++)zaut[il]=0.0;
     //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
-#ifndef ALIGN512
-    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
-#else
+#if defined(ALIGN512)
     posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zbut, 32, sizeof(double)*st_leafmtxp->ktmax);
+#else
+    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
 #endif
     ls = nd;
     le = 1;
@@ -1037,35 +1041,238 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
       if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
       //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
       if(sttmp->ltmtx==1){
-	/**/
-	double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
-	/**/
-	kt=sttmp->kt;
-	for(il=0;il<kt;il++)zbut[il]=0.0;
-	for(il=0; il<kt; il++){
-	  //zbu[il]=0.0;
-	  for(it=0; it<ndt; it++){
-	    itt=it+nstrtt-1;
-	    itl=it+il*ndt; 
-	    zbut[il] += sttmp->a1[itl]*zu[itt];
-	  }
-	}
-	for(il=0; il<kt; il++){
-	  for(it=0; it<ndl; it++){
-	    ill=it+nstrtl-1;
-	    itl=it+il*ndl; 
-	    zaut[ill] += a2tmp[itl]*zbut[il];
-	  }
-	}
+		/**/
+		double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+		/**/
+		kt=sttmp->kt;
+		for(il=0;il<kt;il++)zbut[il]=0.0;
+		for(il=0; il<kt; il++){
+		  //zbu[il]=0.0;
+		  for(it=0; it<ndt; it++){
+			itt=it+nstrtt-1;
+			itl=it+il*ndt; 
+			zbut[il] += sttmp->a1[itl]*zu[itt];
+		  }
+		}
+		for(il=0; il<kt; il++){
+		  for(it=0; it<ndl; it++){
+			ill=it+nstrtl-1;
+			itl=it+il*ndl; 
+			zaut[ill] += a2tmp[itl]*zbut[il];
+		  }
+		}
+		/*
+		for(it=0; it<ndl; it++){
+		  ill=it+nstrtl-1;
+		  for(il=0; il<kt; il++){
+			itl=it*kt + il;
+			zaut[ill] += a2tmp[itl]*zbut[il];
+		  }
+		}
+		*/
       } else if(sttmp->ltmtx==2){
-	for(il=0; il<ndl; il++){
-	  ill=il+nstrtl-1; 
-	  for(it=0; it<ndt; it++){
-	    itt=it+nstrtt-1; 
-	    itl=it+il*ndt;
-	    zaut[ill] += sttmp->a1[itl]*zu[itt];
-	  }
-	}
+		for(il=0; il<ndl; il++){
+		  ill=il+nstrtl-1; 
+		  for(it=0; it<ndt; it++){
+			itt=it+nstrtt-1; 
+			itl=it+il*ndt;
+			zaut[ill] += sttmp->a1[itl]*zu[itt];
+		  }
+		}
+      }
+    }
+    for(il=ls-1;il<=le-1;il++){
+#pragma omp atomic
+      zau[il] += zaut[il];
+    }
+    free(zaut); free(zbut);
+  }
+}
+
+void  c_hacapk_adot_body_lfmtx_hyp_calc_wa
+(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+ double *time_batch, double *time_set, double *time_copy, int nd) {
+#pragma omp parallel
+  {
+    register int ip,il,it;
+    int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
+    int st_lf_stride = st_leafmtxp->st_lf_stride;
+    size_t a1size;
+    int ith, nths, nthe;
+    double *zaut, *zbut;
+    int ls, le;
+    int i;
+
+#pragma omp for
+    for(i=0;i<nd;i++)zau[i]=0.0;
+
+    nlf=st_leafmtxp->nlf;
+    //fprintf(stderr,"nlf=%d \n",nlf);
+
+#if defined(ALIGN512)
+    posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zaut, 32, sizeof(double)*nd);
+#else
+    zaut = (double*)malloc(sizeof(double)*nd);
+#endif
+    for(il=0;il<nd;il++)zaut[il]=0.0;
+    //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
+#if defined(ALIGN512)
+    posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zbut, 32, sizeof(double)*st_leafmtxp->ktmax);
+#else
+    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
+#endif
+    ls = nd;
+    le = 1;
+#pragma omp for
+    for(ip=0; ip<nlf; ip++){
+      //ip=0;{
+      /**/
+      stc_HACApK_leafmtx *sttmp;
+      sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+      //fprintf(stderr, "%d: %p\n", ip, sttmp);
+      /**/
+
+      ndl   =sttmp->ndl; 
+      ndt   =sttmp->ndt;
+      nstrtl=sttmp->nstrtl; 
+      nstrtt=sttmp->nstrtt;
+      //fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
+      if(nstrtl<ls)ls=nstrtl;
+      if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
+      //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
+      if(sttmp->ltmtx==1){
+		/**/
+		double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+		/**/
+		kt=sttmp->kt;
+		for(il=0;il<kt;il++)zbut[il]=0.0;
+		for(il=0; il<kt; il++){
+		  //zbu[il]=0.0;
+		  for(it=0; it<ndt; it++){
+			itt=it+nstrtt-1;
+			itl=it+il*ndt; 
+			zbut[il] += sttmp->a1[itl]*zu[itt];
+		  }
+		}
+		for(il=0; il<kt; il++){
+		  for(it=0; it<ndl; it++){
+			ill=it+nstrtl-1;
+			itl=it+il*ndl; 
+			zaut[ill] += a2tmp[itl]*zbut[il];
+		  }
+		}
+      } else if(sttmp->ltmtx==2){
+		for(il=0; il<ndl; il++){
+		  ill=il+nstrtl-1; 
+		  for(it=0; it<ndt; it++){
+			itt=it+nstrtt-1; 
+			itl=it+il*ndt;
+			zaut[ill] += sttmp->a1[itl]*zu[itt];
+		  }
+		}
+      }
+    }
+    for(il=ls-1;il<=le-1;il++){
+	  //#pragma omp atomic
+      zau[il] += zaut[il];
+    }
+    free(zaut); free(zbut);
+  }
+}
+
+void  c_hacapk_adot_body_lfmtx_hyp_calc_nt
+(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+ double *time_batch, double *time_set, double *time_copy, int nd) {
+#pragma omp parallel
+  {
+    register int ip,il,it;
+    int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
+    int st_lf_stride = st_leafmtxp->st_lf_stride;
+    size_t a1size;
+    int ith, nths, nthe;
+    double *zaut, *zbut;
+    int ls, le;
+    int i;
+
+#pragma omp for
+    for(i=0;i<nd;i++)zau[i]=0.0;
+
+    nlf=st_leafmtxp->nlf;
+    //fprintf(stderr,"nlf=%d \n",nlf);
+
+#if defined(ALIGN512)
+    posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zaut, 32, sizeof(double)*nd);
+#else
+    zaut = (double*)malloc(sizeof(double)*nd);
+#endif
+    for(il=0;il<nd;il++)zaut[il]=0.0;
+    //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
+#if defined(ALIGN512)
+    posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zbut, 32, sizeof(double)*st_leafmtxp->ktmax);
+#else
+    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
+#endif
+    ls = nd;
+    le = 1;
+#pragma omp for
+    for(ip=0; ip<nlf; ip++){
+      //ip=0;{
+      /**/
+      stc_HACApK_leafmtx *sttmp;
+      sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+      //fprintf(stderr, "%d: %p\n", ip, sttmp);
+      /**/
+
+      ndl   =sttmp->ndl; 
+      ndt   =sttmp->ndt;
+      nstrtl=sttmp->nstrtl; 
+      nstrtt=sttmp->nstrtt;
+      //fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
+      if(nstrtl<ls)ls=nstrtl;
+      if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
+      //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
+      if(sttmp->ltmtx==1){
+		/**/
+		double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+		/**/
+		kt=sttmp->kt;
+#pragma vector nontemporal(sttmp->a1)
+#pragma vector temporal(zbut, zu)
+		for(il=0;il<kt;il++)zbut[il]=0.0;
+		for(il=0; il<kt; il++){
+		  //zbu[il]=0.0;
+		  for(it=0; it<ndt; it++){
+			itt=it+nstrtt-1;
+			itl=it+il*ndt; 
+			zbut[il] += sttmp->a1[itl]*zu[itt];
+		  }
+		}
+		for(il=0; il<kt; il++){
+		  for(it=0; it<ndl; it++){
+			ill=it+nstrtl-1;
+			itl=it+il*ndl; 
+			zaut[ill] += a2tmp[itl]*zbut[il];
+		  }
+		}
+      } else if(sttmp->ltmtx==2){
+#pragma vector nontemporal(sttmp->a1)
+#pragma vector temporal(zaut, zu)
+		for(il=0; il<ndl; il++){
+		  ill=il+nstrtl-1; 
+		  for(it=0; it<ndt; it++){
+			itt=it+nstrtt-1; 
+			itl=it+il*ndt;
+			zaut[ill] += sttmp->a1[itl]*zu[itt];
+		  }
+		}
       }
     }
     for(il=ls-1;il<=le-1;il++){
@@ -1189,17 +1396,21 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc3
     nlf=st_leafmtxp->nlf;
     //fprintf(stderr,"nlf=%d \n",nlf);
 
-#ifndef ALIGN512
-    zaut = (double*)malloc(sizeof(double)*nd);
-#else
+#if defined(ALIGN512)
     posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zaut, 32, sizeof(double)*nd);
+#else
+    zaut = (double*)malloc(sizeof(double)*nd);
 #endif
     for(il=0;il<nd;il++)zaut[il]=0.0;
     //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
-#ifndef ALIGN512
-    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
-#else
+#if defined(ALIGN512)
     posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zbut, 32, sizeof(double)*st_leafmtxp->ktmax);
+#else
+    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
 #endif
     ls = nd;
     le = 1;
@@ -1256,6 +1467,101 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc3
     }
     for(il=ls-1;il<=le-1;il++){
 #pragma omp atomic
+      zau[il] += zaut[il];
+    }
+    free(zaut); free(zbut);
+  }
+}
+void  c_hacapk_adot_body_lfmtx_hyp_calc3_wa
+(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+ double *time_batch, double *time_set, double *time_copy, int nd) {
+#pragma omp parallel
+  {
+    register int ip,il,it;
+    int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
+    int st_lf_stride = st_leafmtxp->st_lf_stride;
+    size_t a1size;
+    int ith, nths, nthe;
+    double *zaut, *zbut;
+    int ls, le;
+    int i;
+
+#pragma omp for
+    for(i=0;i<nd;i++)zau[i]=0.0;
+
+    nlf=st_leafmtxp->nlf;
+    //fprintf(stderr,"nlf=%d \n",nlf);
+
+#if defined(ALIGN512)
+    posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zaut, 32, sizeof(double)*nd);
+#else
+    zaut = (double*)malloc(sizeof(double)*nd);
+#endif
+    for(il=0;il<nd;il++)zaut[il]=0.0;
+    //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
+#if defined(ALIGN512)
+    posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zbut, 32, sizeof(double)*st_leafmtxp->ktmax);
+#else
+    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
+#endif
+    ls = nd;
+    le = 1;
+
+    for(ip=0; ip<nlf; ip++){
+      //ip=0;{
+      /**/
+      stc_HACApK_leafmtx *sttmp;
+      sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+      //fprintf(stderr, "%d: %p\n", ip, sttmp);
+      /**/
+
+      ndl   =sttmp->ndl; 
+      ndt   =sttmp->ndt;
+      nstrtl=sttmp->nstrtl; 
+      nstrtt=sttmp->nstrtt;
+      //fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
+      if(nstrtl<ls)ls=nstrtl;
+      if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
+      //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
+      if(sttmp->ltmtx==1){
+	/**/
+	double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+	/**/
+	kt=sttmp->kt;
+	//#pragma omp for
+	//for(il=0;il<kt;il++)zbut[il]=0.0;
+#pragma omp for
+	for(il=0;il<kt; il++){
+	  zbut[il]=0.0;
+	  //zbu[il]=0.0;
+	  for(it=0; it<ndt; it++){
+	    itt=it+nstrtt-1;
+	    itl=it+il*ndt; 
+	    zbut[il] += sttmp->a1[itl]*zu[itt];
+	  }
+	  for(it=0; it<ndl; it++){
+	    ill=it+nstrtl-1;
+	    itl=it+il*ndl; 
+	    zaut[ill] += a2tmp[itl]*zbut[il];
+	  }
+	}
+      } else if(sttmp->ltmtx==2){
+#pragma omp for
+	for(il=0; il<ndl; il++){
+	  ill=il+nstrtl-1; 
+	  for(it=0; it<ndt; it++){
+	    itt=it+nstrtt-1; 
+	    itl=it+il*ndt;
+	    zaut[ill] += sttmp->a1[itl]*zu[itt];
+	  }
+	}
+      }
+    }
+    for(il=ls-1;il<=le-1;il++){
       zau[il] += zaut[il];
     }
     free(zaut); free(zbut);
@@ -1319,7 +1625,7 @@ void c_hacapk_adot_cax_lfmtx_hyp_comm
 
 void c_hacapk_bicgstab_cax_lfmtx_hyp_
 (stc_HACApK_leafmtxp *st_leafmtxp, stc_HACApK_lcontrol *st_ctl,
- double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *lb, int *omp) {
+ double *u, double *b, double*param, int *nd, int *nstp, int *lrtrn, int *lb, int *omp, int *wa) {
   // local constants
   int converged = 0;
   int ione = 1;
@@ -1346,18 +1652,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   nrank = lpmd[1];
   MPI_Barrier( icomm );
 
-#ifndef ALIGN512
-  wws = (double*)malloc((*nd) * sizeof(double));
-  wwr = (double*)malloc((*nd) * sizeof(double));
-  zt = (double*)malloc((*nd) * sizeof(double));
-  zr = (double*)malloc((*nd) * sizeof(double));
-  zp = (double*)malloc((*nd) * sizeof(double));
-  zkp = (double*)malloc((*nd) * sizeof(double));
-  zakp = (double*)malloc((*nd) * sizeof(double));
-  zkt = (double*)malloc((*nd) * sizeof(double));
-  zakt= (double*)malloc((*nd) * sizeof(double));
-  zshdw = (double*)malloc((*nd) * sizeof(double));
-#else
+#if defined(ALIGN512)
   posix_memalign((void**)&wws,   64, (*nd)*sizeof(double));
   posix_memalign((void**)&wwr,   64, (*nd)*sizeof(double));
   posix_memalign((void**)&zt,    64, (*nd)*sizeof(double));
@@ -1368,6 +1663,28 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   posix_memalign((void**)&zkt,   64, (*nd)*sizeof(double));
   posix_memalign((void**)&zakt,  64, (*nd)*sizeof(double));
   posix_memalign((void**)&zshdw, 64, (*nd)*sizeof(double));
+#elif defined(ALIGN256)
+  posix_memalign((void**)&wws,   32, (*nd)*sizeof(double));
+  posix_memalign((void**)&wwr,   32, (*nd)*sizeof(double));
+  posix_memalign((void**)&zt,    32, (*nd)*sizeof(double));
+  posix_memalign((void**)&zr,    32, (*nd)*sizeof(double));
+  posix_memalign((void**)&zp,    32, (*nd)*sizeof(double));
+  posix_memalign((void**)&zkp,   32, (*nd)*sizeof(double));
+  posix_memalign((void**)&zakp,  32, (*nd)*sizeof(double));
+  posix_memalign((void**)&zkt,   32, (*nd)*sizeof(double));
+  posix_memalign((void**)&zakt,  32, (*nd)*sizeof(double));
+  posix_memalign((void**)&zshdw, 32, (*nd)*sizeof(double));
+#else
+  wws = (double*)malloc((*nd) * sizeof(double));
+  wwr = (double*)malloc((*nd) * sizeof(double));
+  zt = (double*)malloc((*nd) * sizeof(double));
+  zr = (double*)malloc((*nd) * sizeof(double));
+  zp = (double*)malloc((*nd) * sizeof(double));
+  zkp = (double*)malloc((*nd) * sizeof(double));
+  zakp = (double*)malloc((*nd) * sizeof(double));
+  zkt = (double*)malloc((*nd) * sizeof(double));
+  zakt= (double*)malloc((*nd) * sizeof(double));
+  zshdw = (double*)malloc((*nd) * sizeof(double));
 #endif
   // copy matrix to GPU
   //c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
@@ -1392,11 +1709,18 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   tic = MPI_Wtime();
   for(i=0;i<(*nd);i++)zshdw[i]=0.0;
   if(*lb==0){
-    if(*omp==0){
-      c_hacapk_adot_body_lfmtx_hyp_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
-    }else{
-      c_hacapk_adot_body_lfmtx_hyp_calc3(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
-    }
+	switch(*omp){
+	case 0: // default
+	  c_hacapk_adot_body_lfmtx_hyp_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	case 1: // inner
+	  c_hacapk_adot_body_lfmtx_hyp_calc3(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	case 2: // w/o atomic
+	  c_hacapk_adot_body_lfmtx_hyp_calc_wa(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	case 3: // inner w/o atomic
+	  c_hacapk_adot_body_lfmtx_hyp_calc3_wa(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	case 4: // non-temporal
+	  c_hacapk_adot_body_lfmtx_hyp_calc_nt(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	}
   }else{
     //c_hacapk_adot_body_lfmtx_hyp_calc2(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd, st_ctl->lthr);
   }
@@ -1466,10 +1790,17 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	//for(i=0;i<(*nd);i++)zakp[i]=0.0;
 	tic = MPI_Wtime();
 	if(*lb==0){
-	  if(*omp==0){
-	    c_hacapk_adot_body_lfmtx_hyp_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
-	  }else{
-	    c_hacapk_adot_body_lfmtx_hyp_calc3(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
+	  switch(*omp){
+	  case 0: // default
+		c_hacapk_adot_body_lfmtx_hyp_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	  case 1: // inner
+		c_hacapk_adot_body_lfmtx_hyp_calc3(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	  case 2: // w/o atomic
+		c_hacapk_adot_body_lfmtx_hyp_calc_wa(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	  case 3: // inner w/o atomic
+		c_hacapk_adot_body_lfmtx_hyp_calc3_wa(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	  case 4: // non-temporal
+		c_hacapk_adot_body_lfmtx_hyp_calc_nt(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd); break;
 	  }
 	}else{
 	  //c_hacapk_adot_body_lfmtx_hyp_calc2(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd,st_ctl->lthr);
@@ -1514,10 +1845,17 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	//for(i=0;i<(*nd);i++)zakt[i]=0.0;
 	tic = MPI_Wtime();
 	if(*lb==0){
-	  if(*omp==0){
-	    c_hacapk_adot_body_lfmtx_hyp_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
-	  }else{
-	    c_hacapk_adot_body_lfmtx_hyp_calc3(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
+	  switch(*omp){
+	  case 0: // default
+		c_hacapk_adot_body_lfmtx_hyp_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	  case 1: // inner
+		c_hacapk_adot_body_lfmtx_hyp_calc3(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	  case 2: // w/o atomic
+		c_hacapk_adot_body_lfmtx_hyp_calc_wa(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	  case 3: // inner w/o atomic
+		c_hacapk_adot_body_lfmtx_hyp_calc3_wa(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd); break;
+	  case 4: // non-temporal
+		c_hacapk_adot_body_lfmtx_hyp_calc_nt(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd); break;
 	  }
 	}else{
 	  //c_hacapk_adot_body_lfmtx_hyp_calc2(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd,st_ctl->lthr);
@@ -1578,19 +1916,27 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
     time = en_measure_time - st_measure_time;
     if (st_ctl->param[0] > 0) {
       //printf( " End: %d, %.2e\n",mpinr,time );
-      char str[16];
+      char str[64];
       if(*lb==0){snprintf(str,16,"C-OMP");}else{snprintf(str,16,"C-OMP(LoadBalance)");}
+	  switch(*omp){
+	  case 0: strncat(str,"[default]\n",64); break;
+	  case 1: strncat(str,"[inner]\n",64); break;
+	  case 2: strncat(str,"[w/o atomic]\n",64); break;
+	  case 3: strncat(str,"[inner w/o atomic]\n",64); break;
+	  case 4: strncat(str,"[non-temporal]\n",64); break;
+	  }
+
       for(i=0;i<nrank;i++){
-	if(i==mpinr){
-	  printf( "%s  %d  BiCG        = %.5e\n", str, i, time );
-	  printf( "%s  %d  time_mpi    = %.5e\n", str, i, time_mpi );
-	  printf( "%s  %d  time_matvec = %.5e\n", str, i, time_spmv );
-	  printf( "%s  %d  >time_copy  = %.5e\n", str, i, time_copy );
-	  printf( "%s  %d  >time_set   = %.5e\n", str, i, time_set );
-	  printf( "%s  %d  >time_batch = %.5e\n", str, i, time_batch );
-	  printf( "%s  %d  iteration   = %d\n", str, i, step );
-	}
-	MPI_Barrier( icomm );
+		if(i==mpinr){
+		  printf( "%s  %d  BiCG        = %.5e\n", str, i, time );
+		  printf( "%s  %d  time_mpi    = %.5e\n", str, i, time_mpi );
+		  printf( "%s  %d  time_matvec = %.5e\n", str, i, time_spmv );
+		  printf( "%s  %d  >time_copy  = %.5e\n", str, i, time_copy );
+		  printf( "%s  %d  >time_set   = %.5e\n", str, i, time_set );
+		  printf( "%s  %d  >time_batch = %.5e\n", str, i, time_batch );
+		  printf( "%s  %d  iteration   = %d\n", str, i, step );
+		}
+		MPI_Barrier( icomm );
       }
     }
     // delete matrix

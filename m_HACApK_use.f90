@@ -433,7 +433,7 @@ contains
      endif
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,0, 0)
+     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,0, 0, 0)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
@@ -442,8 +442,59 @@ contains
         write(6,*)
      endif
 #endif
+#if 1
+! C full CPU (OpenMP + MKL-seq)
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c FULL CPU OMP + MKL-seq begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_hyp_mkl(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK FULL CPU OMP + MKL-seq =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! C full CPU (OpenMP) w/o atomic (result is incorrect)
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c FULL CPU OMP begin w/o atomic (incorrect for comparison)"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,0, 2, 1)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK FULL CPU OMP w/o atomic (incorrect for comparison) =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
+! C full CPU (OpenMP) w/ temporal directive
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c FULL CPU OMP begin w/ temporal"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,0, 4, 0)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK FULL CPU OMP w/ temporal =',time_bicgstab
+        write(6,*)
+     endif
+#endif
 #if 0
-! C full CPU (OpenMP) inner
+! C full CPU (OpenMP) inner : nlf-loop is not parallelized
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
         write(*,*)"HACApK_c FULL CPU OMP inner begin"
@@ -474,23 +525,6 @@ contains
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
      if(st_ctl%param(1)>0 .and. mpinr==0) then
         write(6,2000) ' time_c_HACApK FULL CPU OMP/lb =',time_bicgstab
-        write(6,*)
-     endif
-#endif
-#if 1
-! C full CPU (OpenMP + MKL-seq)
-     u_copy(:nd) = u(:nd)
-     if(st_ctl%param(1)>0 .and. mpinr==0) then
-        write(*,*)"HACApK_c FULL CPU OMP + MKL-seq begin"
-     endif
-     call MPI_Barrier( icomm, ierr )
-     st_measure_time_bicgstab=MPI_Wtime()
-     call c_HACApK_bicgstab_cax_lfmtx_hyp_mkl(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
-     call MPI_Barrier( icomm, ierr )
-     en_measure_time_bicgstab=MPI_Wtime()
-     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
-     if(st_ctl%param(1)>0 .and. mpinr==0) then
-        write(6,2000) ' time_c_HACApK FULL CPU OMP + MKL-seq =',time_bicgstab
         write(6,*)
      endif
 #endif
