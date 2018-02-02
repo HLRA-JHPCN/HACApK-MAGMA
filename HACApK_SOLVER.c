@@ -985,7 +985,7 @@ void c_hacapk_adot_body_lfdel_magma
 
 // C + OpenMP
 
-void  c_hacapk_adot_body_lfmtx_hyp_calc
+void  c_hacapk_adot_body_lfmtx_hyp_calc0
 (double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
  double *time_batch, double *time_set, double *time_copy, int nd) {
 #pragma omp parallel
@@ -1061,7 +1061,94 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
 			zaut[ill] += a2tmp[itl]*zbut[il];
 		  }
 		}
-		/*
+      } else if(sttmp->ltmtx==2){
+		for(il=0; il<ndl; il++){
+		  ill=il+nstrtl-1; 
+		  for(it=0; it<ndt; it++){
+			itt=it+nstrtt-1; 
+			itl=it+il*ndt;
+			zaut[ill] += sttmp->a1[itl]*zu[itt];
+		  }
+		}
+      }
+    }
+    for(il=ls-1;il<=le-1;il++){
+#pragma omp atomic
+      zau[il] += zaut[il];
+    }
+    free(zaut); free(zbut);
+  }
+}
+
+void  c_hacapk_adot_body_lfmtx_hyp_calc
+(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
+ double *time_batch, double *time_set, double *time_copy, int nd) {
+#pragma omp parallel
+  {
+    register int ip,il,it;
+    int nlf,ndl,ndt,nstrtl,nstrtt,kt,itl,itt,ill;
+    int st_lf_stride = st_leafmtxp->st_lf_stride;
+    size_t a1size;
+    int ith, nths, nthe;
+    double *zaut, *zbut;
+    int ls, le;
+    int i;
+
+#pragma omp for
+    for(i=0;i<nd;i++)zau[i]=0.0;
+
+    nlf=st_leafmtxp->nlf;
+    //fprintf(stderr,"nlf=%d \n",nlf);
+
+#if defined(ALIGN512)
+    posix_memalign((void**)&zaut, 64, sizeof(double)*nd);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zaut, 32, sizeof(double)*nd);
+#else
+    zaut = (double*)malloc(sizeof(double)*nd);
+#endif
+    for(il=0;il<nd;il++)zaut[il]=0.0;
+    //printf("st_leafmtxp->ktmax = %d\n",st_leafmtxp->ktmax);
+#if defined(ALIGN512)
+    posix_memalign((void**)&zbut, 64, sizeof(double)*st_leafmtxp->ktmax);
+#elif defined(ALIGN256)
+    posix_memalign((void**)&zbut, 32, sizeof(double)*st_leafmtxp->ktmax);
+#else
+    zbut = (double*)malloc(sizeof(double)*st_leafmtxp->ktmax);
+#endif
+    ls = nd;
+    le = 1;
+#pragma omp for
+    for(ip=0; ip<nlf; ip++){
+      //ip=0;{
+      /**/
+      stc_HACApK_leafmtx *sttmp;
+      sttmp = (void *)(st_leafmtxp->st_lf) + st_lf_stride * ip;
+      //fprintf(stderr, "%d: %p\n", ip, sttmp);
+      /**/
+
+      ndl   =sttmp->ndl; 
+      ndt   =sttmp->ndt;
+      nstrtl=sttmp->nstrtl; 
+      nstrtt=sttmp->nstrtt;
+      //fprintf(stderr,"ip=%d, ndl=%d, ndt=%d, nstrtl=%d, nstrtt=%d \n",ip,ndl,ndt,nstrtl,nstrtt);
+      if(nstrtl<ls)ls=nstrtl;
+      if(nstrtl+ndl-1>le)le=nstrtl+ndl-1;
+      //printf("DBG: ltmtx=%d\n",sttmp->ltmtx);
+      if(sttmp->ltmtx==1){
+		/**/
+		double *a2tmp = (double *)((void*)(sttmp->a1)+sttmp->a1size);
+		/**/
+		kt=sttmp->kt;
+		for(il=0;il<kt;il++)zbut[il]=0.0;
+		for(il=0; il<kt; il++){
+		  //zbu[il]=0.0;
+		  for(it=0; it<ndt; it++){
+			itt=it+nstrtt-1;
+			itl=it+il*ndt; 
+			zbut[il] += sttmp->a1[itl]*zu[itt];
+		  }
+		}
 		for(it=0; it<ndl; it++){
 		  ill=it+nstrtl-1;
 		  for(il=0; il<kt; il++){
@@ -1069,7 +1156,6 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
 			zaut[ill] += a2tmp[itl]*zbut[il];
 		  }
 		}
-		*/
       } else if(sttmp->ltmtx==2){
 		for(il=0; il<ndl; il++){
 		  ill=il+nstrtl-1; 
@@ -1710,6 +1796,8 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   for(i=0;i<(*nd);i++)zshdw[i]=0.0;
   if(*lb==0){
 	switch(*omp){
+	case -1: // default
+	  c_hacapk_adot_body_lfmtx_hyp_calc0(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd); break;
 	case 0: // default
 	  c_hacapk_adot_body_lfmtx_hyp_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd); break;
 	case 1: // inner
@@ -1791,6 +1879,8 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	tic = MPI_Wtime();
 	if(*lb==0){
 	  switch(*omp){
+	  case -1: // default
+		c_hacapk_adot_body_lfmtx_hyp_calc0(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd); break;
 	  case 0: // default
 		c_hacapk_adot_body_lfmtx_hyp_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd); break;
 	  case 1: // inner
@@ -1846,6 +1936,8 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	tic = MPI_Wtime();
 	if(*lb==0){
 	  switch(*omp){
+	  case -1: // default
+		c_hacapk_adot_body_lfmtx_hyp_calc0(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd); break;
 	  case 0: // default
 		c_hacapk_adot_body_lfmtx_hyp_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd); break;
 	  case 1: // inner
@@ -1919,6 +2011,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
       char str[64];
       if(*lb==0){snprintf(str,16,"C-OMP");}else{snprintf(str,16,"C-OMP(LoadBalance)");}
 	  switch(*omp){
+	  case -1: strncat(str,"[default x]\n",64); break;
 	  case 0: strncat(str,"[default]\n",64); break;
 	  case 1: strncat(str,"[inner]\n",64); break;
 	  case 2: strncat(str,"[w/o atomic]\n",64); break;

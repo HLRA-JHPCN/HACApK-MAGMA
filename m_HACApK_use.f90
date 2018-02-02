@@ -426,6 +426,23 @@ contains
      endif
 #endif
 #if 1
+! C full CPU (OpenMP) original(mistake)
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c FULL CPU OMP x begin"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_cax_lfmtx_hyp(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn,0, -1, 0)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK FULL CPU OMP x =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+#if 1
 ! C full CPU (OpenMP)
      u_copy(:nd) = u(:nd)
      if(st_ctl%param(1)>0 .and. mpinr==0) then
