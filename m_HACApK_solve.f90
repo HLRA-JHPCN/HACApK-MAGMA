@@ -433,7 +433,8 @@ end subroutine HACApK_bicgstab_lfmtx
    call MPI_Barrier( icomm, ierr )
    en_measure_time = MPI_Wtime()
    time = en_measure_time - st_measure_time
- 2002 format(i,a,1pe8.1,a,1pe8.1)
+! 2002 format(i,a,1pe8.1,a,1pe8.1)
+ 2002 format(i,a,1pe10.3,a,1pe10.3)
    if(st_ctl%param(1)>0 .and. mpinr==0) write(6,2002) in,': time=',time,', log10(zrnorm/bnorm)=',log10(zrnorm/bnorm)
  enddo
  call MPI_Barrier( icomm, ierr )
@@ -1018,7 +1019,8 @@ end function HACApK_adot_pmt_lfmtx_hyp
  time = en_measure_time - st_measure_time
 ! delete matrix
  call c_HACApK_adot_body_lfdel_batch(st_leafmtxp)
- 2001 format(5(a,1pe15.8)/)
+! 2001 format(5(a,1pe15.8)/)
+ 2001 format(5(a,1pe20.10)/)
  2003 format(5(a,i,a,1pe9.2)/)
  !if(st_ctl%param(1)>0)  write(6,2003) ' End: ',mpinr,' ',time
  if(st_ctl%param(1)>0 .and. mpinr==0)  write(6,2001) 'F-FLAT    BiCG         =',time

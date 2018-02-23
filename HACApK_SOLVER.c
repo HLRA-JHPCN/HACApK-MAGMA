@@ -317,7 +317,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
   double en_measure_time, st_measure_time, time;
   int info, step, mstep;
   int mpinr, nrank, ierr;
-  double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+  double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
   int i;
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
@@ -341,7 +341,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
   // copy matrix to GPU
   //c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
 
-  time_spmv = 0.0;
+  time_matvec = 0.0;
   time_mpi = 0.0;
   time_batch = 0.0;
   time_set = 0.0;
@@ -358,7 +358,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
   tic = MPI_Wtime();
   for(i=0;i<(*nd);i++)zshdw[i]=0.0;
   c_hacapk_adot_body_lfmtx_seq_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy);
-  time_spmv += (MPI_Wtime()-tic);
+  time_matvec += (MPI_Wtime()-tic);
   c_hacapk_adot_cax_lfmtx_seq_comm(zshdw, st_ctl, wws, wwr, isct, irct, *nd, &time_mpi);
   //
   for(i=0;i<(*nd);i++)zr[i]+=mone*zshdw[i];
@@ -396,7 +396,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 	for(i=0;i<(*nd);i++)zakp[i]=0.0;
 	tic = MPI_Wtime();
 	c_hacapk_adot_body_lfmtx_seq_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy);
-	time_spmv += (MPI_Wtime()-tic);
+	time_matvec += (MPI_Wtime()-tic);
 	/*
 	{
 	  FILE *F;
@@ -429,7 +429,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 	for(i=0;i<(*nd);i++)zakt[i]=0.0;
 	tic = MPI_Wtime();
 	c_hacapk_adot_body_lfmtx_seq_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy);
-	time_spmv += (MPI_Wtime()-tic);
+	time_matvec += (MPI_Wtime()-tic);
 	c_hacapk_adot_cax_lfmtx_seq_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
 	znorm = 0.0; for(i=0;i<(*nd);i++)znorm += zakt[i]*zt[i];
@@ -472,7 +472,7 @@ void c_hacapk_bicgstab_cax_lfmtx_seq_
 	  if(i==mpinr){
 		printf( "C-SEQ  %d BiCG        = %.5e\n", i, time );
 		printf( "C-SEQ  %d time_mpi    = %.5e\n", i, time_mpi );
-		printf( "C-SEQ  %d time_matvec = %.5e\n", i, time_spmv );
+		printf( "C-SEQ  %d time_matvec = %.5e\n", i, time_matvec );
 		printf( "C-SEQ  %d >time_copy  = %.5e\n", i, time_copy );
 		printf( "C-SEQ  %d >time_set   = %.5e\n", i, time_set );
 		printf( "C-SEQ  %d >time_batch = %.5e\n", i, time_batch );
@@ -833,7 +833,7 @@ void c_hacapk_adot_body_lfdel_magma
   double en_measure_time, st_measure_time, time;
   int info, step, mstep;
   int mpinr, nrank, ierr;
-  double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+  double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
   int i;
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
@@ -857,7 +857,7 @@ void c_hacapk_adot_body_lfdel_magma
   // copy matrix to GPU
   c_hacapk_adot_body_lfcpy_magma(nd, st_leafmtxp);
 
-  time_spmv = 0.0;
+  time_matvec = 0.0;
   time_mpi = 0.0;
   time_batch = 0.0;
   time_set = 0.0;
@@ -875,7 +875,7 @@ void c_hacapk_adot_body_lfdel_magma
   tic = MPI_Wtime();
   dlaset_( "F", nd, &ione, &zero, &zero, zshdw, nd );
   c_hacapk_adot_body_lfmtx_magma_calc(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy,*nd);
-  time_spmv += (MPI_Wtime()-tic);
+  time_matvec += (MPI_Wtime()-tic);
   c_hacapk_adot_cax_lfmtx_magma_comm(zshdw, st_ctl, wws, wwr, isct, irct, *nd, &time_mpi);
   //
   daxpy_( nd, &mone, zshdw, &ione, zr, &ione );
@@ -903,7 +903,7 @@ void c_hacapk_adot_body_lfdel_magma
 	dlaset_( "F", nd, &ione, &zero, &zero, zakp, nd );
 	tic = MPI_Wtime();
 	c_hacapk_adot_body_lfmtx_magma_calc(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
-	time_spmv += (MPI_Wtime()-tic);
+	time_matvec += (MPI_Wtime()-tic);
 	c_hacapk_adot_cax_lfmtx_magma_comm(zakp,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
 	znorm = c_hacapk_dotp_d(*nd, zshdw, zr); 
@@ -920,7 +920,7 @@ void c_hacapk_adot_body_lfdel_magma
 	dlaset_( "F", nd, &ione, &zero, &zero, zakt, nd );
 	tic = MPI_Wtime();
 	c_hacapk_adot_body_lfmtx_magma_calc(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
-	time_spmv += (MPI_Wtime()-tic);
+	time_matvec += (MPI_Wtime()-tic);
 	c_hacapk_adot_cax_lfmtx_magma_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
 	znorm = c_hacapk_dotp_d(*nd, zakt, zt); 
@@ -955,7 +955,7 @@ void c_hacapk_adot_body_lfdel_magma
 	  if (mpinr == i) {
 		printf( "C-MAGMA %d   BiCG        = %.5e\n", i, time );
 		printf( "C-MAGMA %d   time_mpi    = %.5e\n", i, time_mpi );
-		printf( "C-MAGMA %d   time_matvec = %.5e\n", i, time_spmv );
+		printf( "C-MAGMA %d   time_matvec = %.5e\n", i, time_matvec );
 		printf( "C-MAGMA %d   >time_copy  = %.5e\n", i, time_copy );
 		printf( "C-MAGMA %d   >time_set   = %.5e\n", i, time_set );
 		printf( "C-MAGMA %d   >time_batch = %.5e\n", i, time_batch );
@@ -1054,10 +1054,10 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc0
 			zbut[il] += sttmp->a1[itl]*zu[itt];
 		  }
 		}
-		for(il=0; il<kt; il++){
-		  for(it=0; it<ndl; it++){
-			ill=it+nstrtl-1;
-			itl=it+il*ndl; 
+		for(it=0; it<ndl; it++){
+		  ill=it+nstrtl-1;
+		  for(il=0; il<kt; il++){
+			itl=it*kt + il;
 			zaut[ill] += a2tmp[itl]*zbut[il];
 		  }
 		}
@@ -1149,10 +1149,10 @@ void  c_hacapk_adot_body_lfmtx_hyp_calc
 			zbut[il] += sttmp->a1[itl]*zu[itt];
 		  }
 		}
-		for(it=0; it<ndl; it++){
-		  ill=it+nstrtl-1;
-		  for(il=0; il<kt; il++){
-			itl=it*kt + il;
+		for(il=0; il<kt; il++){
+		  for(it=0; it<ndl; it++){
+			ill=it+nstrtl-1;
+			itl=it+il*ndl; 
 			zaut[ill] += a2tmp[itl]*zbut[il];
 		  }
 		}
@@ -1728,7 +1728,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   double en_measure_time, st_measure_time, time;
   int info, step, mstep;
   int mpinr, nrank, ierr;
-  double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+  double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
   int i, tid;
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
@@ -1775,7 +1775,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
   // copy matrix to GPU
   //c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
 
-  time_spmv = 0.0;
+  time_matvec = 0.0;
   time_mpi = 0.0;
   time_batch = 0.0;
   time_set = 0.0;
@@ -1821,7 +1821,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
     }
   }
   */
-  time_spmv += (MPI_Wtime()-tic);
+  time_matvec += (MPI_Wtime()-tic);
   c_hacapk_adot_cax_lfmtx_hyp_comm(zshdw, st_ctl, wws, wwr, isct, irct, *nd, &time_mpi);
   //
   /*
@@ -1895,7 +1895,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	}else{
 	  //c_hacapk_adot_body_lfmtx_hyp_calc2(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd,st_ctl->lthr);
 	}
-	time_spmv += (MPI_Wtime()-tic);
+	time_matvec += (MPI_Wtime()-tic);
 	/*
 	{
 	  FILE *F;
@@ -1952,7 +1952,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
 	}else{
 	  //c_hacapk_adot_body_lfmtx_hyp_calc2(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd,st_ctl->lthr);
 	}
-	time_spmv += (MPI_Wtime()-tic);
+	time_matvec += (MPI_Wtime()-tic);
 	c_hacapk_adot_cax_lfmtx_hyp_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
 	znorm = 0.0;
@@ -2011,19 +2011,19 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_
       char str[64];
       if(*lb==0){snprintf(str,16,"C-OMP");}else{snprintf(str,16,"C-OMP(LoadBalance)");}
 	  switch(*omp){
-	  case -1: strncat(str,"[default x]\n",64); break;
-	  case 0: strncat(str,"[default]\n",64); break;
-	  case 1: strncat(str,"[inner]\n",64); break;
-	  case 2: strncat(str,"[w/o atomic]\n",64); break;
-	  case 3: strncat(str,"[inner w/o atomic]\n",64); break;
-	  case 4: strncat(str,"[non-temporal]\n",64); break;
+	  case -1: strncat(str,"[default x]       ",64); break;
+	  case 0:  strncat(str,"[default]         ",64); break;
+	  case 1:  strncat(str,"[inner]           ",64); break;
+	  case 2:  strncat(str,"[w/o atomic]      ",64); break;
+	  case 3:  strncat(str,"[inner w/o atomic]",64); break;
+	  case 4:  strncat(str,"[non-temporal]    ",64); break;
 	  }
 
       for(i=0;i<nrank;i++){
 		if(i==mpinr){
 		  printf( "%s  %d  BiCG        = %.5e\n", str, i, time );
 		  printf( "%s  %d  time_mpi    = %.5e\n", str, i, time_mpi );
-		  printf( "%s  %d  time_matvec = %.5e\n", str, i, time_spmv );
+		  printf( "%s  %d  time_matvec = %.5e\n", str, i, time_matvec );
 		  printf( "%s  %d  >time_copy  = %.5e\n", str, i, time_copy );
 		  printf( "%s  %d  >time_set   = %.5e\n", str, i, time_set );
 		  printf( "%s  %d  >time_batch = %.5e\n", str, i, time_batch );
@@ -2164,7 +2164,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
   double en_measure_time, st_measure_time, time;
   int info, step, mstep;
   int mpinr, nrank, ierr;
-  double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+  double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
   int i, tid;
   MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
   mstep = param[82];
@@ -2188,7 +2188,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
   // copy matrix to GPU
   //c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
 
-  time_spmv = 0.0;
+  time_matvec = 0.0;
   time_mpi = 0.0;
   time_batch = 0.0;
   time_set = 0.0;
@@ -2217,7 +2217,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
     }
   }
   */
-  time_spmv += (MPI_Wtime()-tic);
+  time_matvec += (MPI_Wtime()-tic);
   c_hacapk_adot_cax_lfmtx_hyp_comm(zshdw, st_ctl, wws, wwr, isct, irct, *nd, &time_mpi);
   //
   /*
@@ -2273,7 +2273,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
 	//for(i=0;i<(*nd);i++)zakp[i]=0.0;
 	tic = MPI_Wtime();
 	c_hacapk_adot_body_lfmtx_hyp_calc_mkl(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,*nd);
-	time_spmv += (MPI_Wtime()-tic);
+	time_matvec += (MPI_Wtime()-tic);
 	/*
 	{
 	  FILE *F;
@@ -2313,7 +2313,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
 	//for(i=0;i<(*nd);i++)zakt[i]=0.0;
 	tic = MPI_Wtime();
 	c_hacapk_adot_body_lfmtx_hyp_calc_mkl(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,*nd);
-	time_spmv += (MPI_Wtime()-tic);
+	time_matvec += (MPI_Wtime()-tic);
 	c_hacapk_adot_cax_lfmtx_hyp_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
 	//
 	znorm = 0.0;
@@ -2373,7 +2373,7 @@ void c_hacapk_bicgstab_cax_lfmtx_hyp_mkl_
 		if(i==mpinr){
 			printf( "C-OMP+MKL  %d  BiCG        = %.5e\n", i, time );
 			printf( "C-OMP+MKL  %d  time_mpi    = %.5e\n", i, time_mpi );
-			printf( "C-OMP+MKL  %d  time_matvec = %.5e\n", i, time_spmv );
+			printf( "C-OMP+MKL  %d  time_matvec = %.5e\n", i, time_matvec );
 			printf( "C-OMP+MKL  %d  >time_copy  = %.5e\n", i, time_copy );
 			printf( "C-OMP+MKL  %d  >time_set   = %.5e\n", i, time_set );
 			printf( "C-OMP+MKL  %d  >time_batch = %.5e\n", i, time_batch );
@@ -2418,7 +2418,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
     int mpinr, nrank, ierr;
-    double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+    double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
     int i;
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
@@ -2442,7 +2442,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
     //
-    time_spmv = 0.0;
+    time_matvec = 0.0;
     time_mpi = 0.0;
     time_batch = 0.0;
     time_set = 0.0;
@@ -2458,7 +2458,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     tic = MPI_Wtime();
     lapackf77_dlaset( "F", nd, &ione, &zero, &zero, zshdw, nd );
     c_hacapk_adot_body_lfmtx_batch_(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy);
-    time_spmv += (MPI_Wtime()-tic);
+    time_matvec += (MPI_Wtime()-tic);
     c_hacapk_adot_cax_lfmtx_comm(zshdw, st_ctl, wws, wwr, isct, irct, *nd, &time_mpi);
     //
     blasf77_daxpy( nd, &mone, zshdw, &ione, zr, &ione );
@@ -2486,7 +2486,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         lapackf77_dlaset( "F", nd, &ione, &zero, &zero, zakp, nd );
         tic = MPI_Wtime();
         c_hacapk_adot_body_lfmtx_batch_(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy);
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm(zakp,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
         //
         znorm = c_hacapk_dotp_d(*nd, zshdw, zr ); 
@@ -2503,7 +2503,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         lapackf77_dlaset( "F", nd, &ione, &zero, &zero, zakt, nd );
         tic = MPI_Wtime();
         c_hacapk_adot_body_lfmtx_batch_(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy);
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm(zakt,st_ctl,wws,wwr,isct,irct,*nd, &time_mpi);
         //
         znorm = c_hacapk_dotp_d(*nd, zakt, zt ); 
@@ -2538,7 +2538,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         if (i==mpinr) {
 		  printf( "C-FLAT  %d   BiCG        = %.5e\n", i, time );
 		  printf( "C-FLAT  %d   time_mpi    = %.5e\n", i, time_mpi );
-		  printf( "C-FLAT  %d   time_matvec = %.5e\n", i, time_spmv );
+		  printf( "C-FLAT  %d   time_matvec = %.5e\n", i, time_matvec );
 		  printf( "C-FLAT  %d   >time_copy  = %.5e\n", i, time_copy );
 		  printf( "C-FLAT  %d   >time_set   = %.5e\n", i, time_set );
 		  printf( "C-FLAT  %d   >time_batch = %.5e\n", i, time_batch );
@@ -2588,7 +2588,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
     int mpinr, nrank, ierr;
-    double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+    double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
     int i; 
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
@@ -2632,7 +2632,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
     //
-    time_spmv = 0.0;
+    time_matvec = 0.0;
     time_mpi = 0.0;
     time_batch = 0.0;
     time_set = 0.0;
@@ -2653,7 +2653,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     c_hacapk_adot_body_lfmtx_batch_queue(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy, 
                                          on_gpu, queue);
     magma_queue_sync( queue );
-    time_spmv += (MPI_Wtime()-tic);
+    time_matvec += (MPI_Wtime()-tic);
     c_hacapk_adot_cax_lfmtx_comm_gpu(1, zshdw, zau_cpu, st_ctl, wws_cpu, wwr_cpu, isct, irct, *nd, 
                                      &time_copy,&time_mpi, queue);
     //
@@ -2687,7 +2687,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
         c_hacapk_adot_body_lfmtx_batch_queue(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy,
                                              on_gpu, queue);
         magma_queue_sync( queue );
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(1, zakp, zau_cpu, st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue);
         //
@@ -2708,7 +2708,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
         c_hacapk_adot_body_lfmtx_batch_queue(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy,
                                              on_gpu, queue);
         magma_queue_sync( queue );
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(1, zakt,zau_cpu, st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue);
         //
@@ -2746,7 +2746,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
 		  printf( "C-ALL   %d  BiCG         = %.5e\n", i, time );
 		  printf( "C-ALL   %d  time_mpi     = %.5e\n", i, time_mpi );
 		  printf( "C-ALL   %d  time_copy    = %.5e\n", i, time_copy );
-		  printf( "C-ALL   %d  time_spmv    = %.5e\n", i, time_spmv );
+		  printf( "C-ALL   %d  time_matvec    = %.5e\n", i, time_matvec );
 		  printf( "C-ALL   %d  >time_batch  = %.5e\n", i, time_batch );
 		  printf( "C-ALL   %d  >time_set    = %.5e\n", i, time_set );
 		  printf( "C-ALL   %d  iteration    = %d\n", i, step );
@@ -2803,7 +2803,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
     int mpinr, nrank, ierr;
-    double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+    double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
     double time_set2, time_set3; 
     int i;
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
@@ -2872,7 +2872,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     c_hacapk_adot_cax_lfmtx_warmup(st_ctl, zau_cpu, wws_cpu, wwr_cpu, *nd);
     #endif
     //
-    time_spmv = 0.0;
+    time_matvec = 0.0;
     time_mpi = 0.0;
     time_batch = 0.0;
     time_set = 0.0;
@@ -2898,7 +2898,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
                                         &time_set2, &time_set3,
                                         on_gpu, queue);
     magma_queue_sync( queue[0] );
-    time_spmv += (MPI_Wtime()-tic);
+    time_matvec += (MPI_Wtime()-tic);
     c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zshdw, zau_cpu,
                                      st_ctl, wws_cpu, wwr_cpu, isct, irct, *nd, 
                                      &time_copy,&time_mpi, queue[0]);
@@ -2936,7 +2936,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
                                             &time_set2, &time_set3,
                                             on_gpu, queue);
         magma_queue_sync( queue[0] );
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakp, zau_cpu,
                                          st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue[0]);
@@ -2961,7 +2961,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
                                             &time_set2, &time_set3,
                                             on_gpu, queue);
         magma_queue_sync( queue[0] );
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakt,zau_cpu,
                                          st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue[0]);
@@ -3001,7 +3001,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 		  printf( "  %d    BiCG        = %.5e\n", i, time );
 		  printf( "  %d    time_mpi    = %.5e\n", i, time_mpi );
 		  printf( "  %d    time_copy   = %.5e\n", i, time_copy );
-		  printf( "  %d    time_spmv   = %.5e\n", i, time_spmv );
+		  printf( "  %d    time_matvec   = %.5e\n", i, time_matvec );
 		  printf( "  %d    >time_batch = %.5e\n", i, time_batch );
 		  printf( "  %d    >time_set   = %.5e\n", i, time_set );
 		  printf( "  %d    +time_set2  = %.5e\n", i, time_set2 );
@@ -3067,7 +3067,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
     int mpinr, nrank, ierr;
-    double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+    double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
     double time_set2, time_set3; 
     int i;
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
@@ -3139,7 +3139,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(nd, st_leafmtxp, queue);
     //
-    time_spmv = 0.0;
+    time_matvec = 0.0;
     time_mpi = 0.0;
     time_batch = 0.0;
     time_set = 0.0;
@@ -3172,7 +3172,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
                                         &time_set2, &time_set3,
                                         on_gpu, queue);
     magma_queue_sync( queue[0] );
-    time_spmv += (MPI_Wtime()-tic);
+    time_matvec += (MPI_Wtime()-tic);
     c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zshdw[0], zau_cpu,
                                      st_ctl, wws_cpu, wwr_cpu, isct, irct, *nd, 
                                      &time_copy,&time_mpi, queue[0]);
@@ -3225,7 +3225,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
                                             &time_set2, &time_set3,
                                             on_gpu, queue);
         magma_queue_sync( queue[0] );
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakp[0], zau_cpu,
                                          st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue[0]);
@@ -3261,7 +3261,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
                                             &time_set2, &time_set3,
                                             on_gpu, queue);
         magma_queue_sync( queue[0] );
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(flag, zakt[0],zau_cpu,
                                          st_ctl, wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue[0]);
@@ -3309,7 +3309,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
 		  printf( " %d     BiCG         = %.5e\n", i, time );
 		  printf( " %d     time_mpi     = %.5e\n", i, time_mpi );
 		  printf( " %d     time_copy    = %.5e\n", i, time_copy );
-		  printf( " %d     time_spmv    = %.5e\n", i, time_spmv );
+		  printf( " %d     time_matvec    = %.5e\n", i, time_matvec );
 		  printf( " %d     >time_batch  = %.5e\n", i, time_batch );
 		  printf( " %d     >time_set    = %.5e\n", i, time_set );
 		  printf( " %d       +time_set2 = %.5e\n", i, time_set2 );
@@ -3393,7 +3393,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     double en_measure_time, st_measure_time, time;
     int info, step, mstep;
     int mpinr, nrank, ierr;
-    double time_spmv, time_mpi, time_batch, time_set, time_copy, tic;
+    double time_matvec, time_mpi, time_batch, time_set, time_copy, tic;
     int i;
     MPI_Comm icomm = MPI_COMM_WORLD; //lpmd[0];
     mstep = param[82];
@@ -3444,7 +3444,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
     //
-    time_spmv = 0.0;
+    time_matvec = 0.0;
     time_mpi = 0.0;
     time_batch = 0.0;
     time_set = 0.0;
@@ -3465,7 +3465,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     c_hacapk_adot_body_lfmtx_batch_queue(zv,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy, 
                                          on_gpu, queue);
     magma_queue_sync( queue );
-    time_spmv += (MPI_Wtime()-tic);
+    time_matvec += (MPI_Wtime()-tic);
     c_hacapk_adot_cax_lfmtx_comm_gpu(1, zv, zau_cpu, st_ctl, 
                                      wws_cpu, wwr_cpu, isct, irct, *nd, 
                                      &time_copy,&time_mpi, queue);
@@ -3480,7 +3480,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     c_hacapk_adot_body_lfmtx_batch_queue(zw,st_leafmtxp,zr,wws, &time_batch,&time_set,&time_copy, 
                                          on_gpu, queue);
     magma_queue_sync( queue );
-    time_spmv += (MPI_Wtime()-tic);
+    time_matvec += (MPI_Wtime()-tic);
     c_hacapk_adot_cax_lfmtx_comm_gpu(1, zw, zau_cpu, st_ctl, 
                                      wws_cpu, wwr_cpu, isct, irct, *nd, 
                                      &time_copy,&time_mpi, queue);
@@ -3491,7 +3491,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     c_hacapk_adot_body_lfmtx_batch_queue(zt,st_leafmtxp,zw,wws, &time_batch,&time_set,&time_copy, 
                                          on_gpu, queue);
     magma_queue_sync( queue );
-    time_spmv += (MPI_Wtime()-tic);
+    time_matvec += (MPI_Wtime()-tic);
     c_hacapk_adot_cax_lfmtx_comm_gpu(1, zt, zau_cpu, st_ctl, 
                                      wws_cpu, wwr_cpu, isct, irct, *nd, 
                                      &time_copy,&time_mpi, queue);
@@ -3544,7 +3544,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         c_hacapk_adot_body_lfmtx_batch_queue(zv,st_leafmtxp,zz,wws, &time_batch,&time_set,&time_copy,
                                              on_gpu, queue);
         magma_queue_sync( queue );
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(1, zv, zau_cpu, st_ctl,
                                          wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue);
@@ -3585,7 +3585,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         c_hacapk_adot_body_lfmtx_batch_queue(zt,st_leafmtxp,zw,wws, &time_batch,&time_set,&time_copy,
                                              on_gpu, queue);
         magma_queue_sync( queue );
-        time_spmv += (MPI_Wtime()-tic);
+        time_matvec += (MPI_Wtime()-tic);
         c_hacapk_adot_cax_lfmtx_comm_gpu(1, zt,zau_cpu, st_ctl,
                                          wws_cpu,wwr_cpu, isct,irct,*nd, 
                                          &time_copy,&time_mpi, queue);
@@ -3602,7 +3602,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
 	      printf( "   %d    BiCG        = %.5e\n", i, time );
 	      printf( "   %d    time_mpi    = %.5e\n", i, time_mpi );
 	      printf( "   %d    time_copy   = %.5e\n", i, time_copy );
-	      printf( "   %d    time_spmv   = %.5e\n", i, time_spmv );
+	      printf( "   %d    time_matvec = %.5e\n", i, time_matvec );
 	      printf( "   %d    >time_batch = %.5e\n", i, time_batch );
 	      printf( "   %d    >time_set   = %.5e\n", i, time_set );
 	      printf( "   %d    iteration   = %d\n", i, step );

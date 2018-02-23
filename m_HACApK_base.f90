@@ -306,7 +306,8 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  st_ctl%param(83)=500;      ! solver : maximum iterative number
  st_ctl%param(85)=1;        ! solver : 1:BiCGSTAB 2:GCR(m)
  st_ctl%param(87)=8;        ! solver : number of iteration for reset
- st_ctl%param(98)=1;        ! FORCE NO CONVERGED
+ st_ctl%param(98)=0;        ! FORCE NO CONVERGED
+! st_ctl%param(98)=1;        ! FORCE NO CONVERGED
  st_ctl%param(99)=1         ! Measure the time of Ax; iterative number
  ierr=0; lrtrn=0
  if(present(icomma))then
