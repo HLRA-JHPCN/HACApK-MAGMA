@@ -415,6 +415,25 @@ contains
      endif
 #endif
 #endif
+
+! dump data to file
+#if 1
+     u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(*,*)"HACApK_c dump dat to file"
+     endif
+     call MPI_Barrier( icomm, ierr )
+     st_measure_time_bicgstab=MPI_Wtime()
+     call c_HACApK_bicgstab_dump(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp)
+     call MPI_Barrier( icomm, ierr )
+     en_measure_time_bicgstab=MPI_Wtime()
+     time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+        write(6,2000) ' time_c_HACApK dump data to file =',time_bicgstab
+        write(6,*)
+     endif
+#endif
+
 #if 0
 ! C full CPU (sequential)
      u_copy(:nd) = u(:nd)

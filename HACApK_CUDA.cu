@@ -4329,7 +4329,7 @@ void c_hacapk_bicgstab_cax_lfmtx_cuda6_
   scm=(struct stc_cublasmatrices *)malloc(sizeof(struct stc_cublasmatrices)*st_leafmtxp->nlf);
   myCublasMakeMatrix(st_leafmtxp, scm);
   stat = cublasCreate(&handle);
-  if(stat!=cudaSuccess){
+  if(stat!=CUBLAS_STATUS_SUCCESS){
     printf("cublasCreate failed\n");
     return;
   }
