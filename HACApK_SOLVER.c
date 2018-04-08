@@ -73,7 +73,7 @@ void c_hacapk_adot_cax_lfmtx_warmup(stc_HACApK_lcontrol *st_ctl,
 }
 
 void c_hacapk_adot_cax_lfmtx_comm_setup(stc_HACApK_lcontrol *st_ctl,
-                                        double **buffer, int **p_disps) {
+                                        double **buffer, int **p_disps, magma_queue_t queue) {
     int *lpmd = (int*)((void*)st_ctl->param + st_ctl->lpmd_offset);
     int mpinr = lpmd[2];
     int nrank = lpmd[1];
@@ -92,6 +92,11 @@ void c_hacapk_adot_cax_lfmtx_comm_setup(stc_HACApK_lcontrol *st_ctl,
     }
     *p_disps = disps;
     if (buffer_size > 0) {
+        #if defined(USE_GDR)
+        if (queue != NULL) {
+            magma_dmalloc(buffer, buffer_size);
+        } else
+        #endif
         *buffer = (double*)malloc(buffer_size * sizeof(double));
     } else {
         *buffer = NULL;
@@ -99,7 +104,8 @@ void c_hacapk_adot_cax_lfmtx_comm_setup(stc_HACApK_lcontrol *st_ctl,
 }
 
 void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_lcontrol *st_ctl, double* buffer, int *disps,
-                                  double *wws, double *wwr, int *isct, int *irct, int nd, double *time_mpi) {
+                                  double *wws, double *wwr, int *isct, int *irct, int nd, magma_queue_t queue,
+                                  double *time_mpi) {
     int ione = 1;
     double one = 1.0;
 
@@ -118,6 +124,9 @@ void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_lcontrol *st_ctl, doub
         int ncsp = (mpinr+nrank-1)%nrank; // my source neighbor
         #define COMM_BY_ALLGATHERV
         #if defined(COMM_BY_ALLGATHERV)
+        #if defined(USE_GDR)
+        magma_queue_sync( queue );
+        #endif
         tic = MPI_Wtime();
         MPI_Allgatherv(&zau[lsp[mpinr]-1], lnp[mpinr], MPI_DOUBLE, buffer, lnp, disps, MPI_DOUBLE, MPI_COMM_WORLD);
         *time_mpi += (MPI_Wtime()-tic);
@@ -125,6 +134,11 @@ void c_hacapk_adot_cax_lfmtx_comm(double *zau, stc_HACApK_lcontrol *st_ctl, doub
            int nctp = (ncsp-ic+nrank+1)%nrank; // where it came from
            irct[0] = lnp[nctp];
            irct[1] = lsp[nctp];
+           #if defined(USE_GDR)
+           if (queue != NULL) {
+               magma_daxpy( irct[0], one, &buffer[disps[nctp]], ione, &zau[irct[1]-1], ione, queue );
+           } else
+           #endif
            blasf77_daxpy( &irct[0], &one, &buffer[disps[nctp]], &ione, &zau[irct[1]-1], &ione );
         }
         #else
@@ -194,21 +208,30 @@ void c_hacapk_adot_cax_lfmtx_comm_gpu(int flag, double *zau_gpu, double *zau,
         if (flag == 1) {
             int ione = 1;
             double zero = 0.0;
+            #if defined(USE_GDR)
+            //magmablas_dlaset( MagmaFull, nd, ione, zero, zero, zau_gpu, nd, queue );
+            #else
             lapackf77_dlaset( "F", &nd, &ione, &zero, &zero, zau, &nd );
             magma_dgetvector( lnp[mpinr], &zau_gpu[lsp[mpinr]-1], 1, &zau[lsp[mpinr]-1], 1, queue );
+            #endif
         }
         #if defined(PROF_MAGMA_BATCH)
         *time_copy += MPI_Wtime()-tic;
         #endif
 
-        c_hacapk_adot_cax_lfmtx_comm(zau, st_ctl,buffer,disps, wws,wwr, isct,irct, nd,time_mpi);
+        #if defined(USE_GDR)
+        c_hacapk_adot_cax_lfmtx_comm(zau_gpu, st_ctl,buffer,disps, wws,wwr, isct,irct, nd, queue, time_mpi);
+        #else
+        c_hacapk_adot_cax_lfmtx_comm(zau, st_ctl,buffer,disps, wws,wwr, isct,irct, nd, NULL, time_mpi);
+        #endif
 
         #if defined(PROF_MAGMA_BATCH)
         magma_queue_sync( queue );
         tic = MPI_Wtime();
         #endif
+        #if !defined(USE_GDR)
         magma_dsetvector_async( nd, zau, 1, zau_gpu, 1, queue );
-        //magma_dsetvector( nd, zau, 1, zau_gpu, 1, queue );
+        #endif
         #if defined(PROF_MAGMA_BATCH)
         *time_copy += MPI_Wtime()-tic;
         #endif
@@ -257,7 +280,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     // MPI buffer
     double * buffer = NULL;
     int *disps = NULL;
-    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps);
+    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps, NULL);
 
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
@@ -279,7 +302,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     lapackf77_dlaset( "F", nd, &ione, &zero, &zero, zshdw, nd );
     c_hacapk_adot_body_lfmtx_batch_(zshdw,st_leafmtxp,u,wws, &time_batch,&time_set,&time_copy);
     time_spmv += (MPI_Wtime()-tic);
-    c_hacapk_adot_cax_lfmtx_comm(zshdw, st_ctl,buffer,disps, wws, wwr, isct, irct, *nd, &time_mpi);
+    c_hacapk_adot_cax_lfmtx_comm(zshdw, st_ctl,buffer,disps, wws, wwr, isct, irct, *nd, NULL, &time_mpi);
     //
     blasf77_daxpy( nd, &mone, zshdw, &ione, zr, &ione );
     lapackf77_dlacpy( "F", nd, &ione, zr, nd, zshdw, nd );
@@ -307,7 +330,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         tic = MPI_Wtime();
         c_hacapk_adot_body_lfmtx_batch_(zakp,st_leafmtxp,zkp,wws, &time_batch,&time_set,&time_copy);
         time_spmv += (MPI_Wtime()-tic);
-        c_hacapk_adot_cax_lfmtx_comm(zakp, st_ctl,buffer,disps, wws,wwr,isct,irct,*nd, &time_mpi);
+        c_hacapk_adot_cax_lfmtx_comm(zakp, st_ctl,buffer,disps, wws,wwr,isct,irct,*nd, NULL, &time_mpi);
         //
         znorm = c_hacapk_dotp_d(*nd, zshdw, zr ); 
         zden = c_hacapk_dotp_d(*nd, zshdw, zakp );
@@ -324,7 +347,7 @@ void c_hacapk_bicgstab_cax_lfmtx_flat_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
         tic = MPI_Wtime();
         c_hacapk_adot_body_lfmtx_batch_(zakt,st_leafmtxp,zkt,wws, &time_batch,&time_set,&time_copy);
         time_spmv += (MPI_Wtime()-tic);
-        c_hacapk_adot_cax_lfmtx_comm(zakt, st_ctl,buffer,disps, wws,wwr,isct,irct,*nd, &time_mpi);
+        c_hacapk_adot_cax_lfmtx_comm(zakt, st_ctl,buffer,disps, wws,wwr,isct,irct,*nd, NULL, &time_mpi);
         //
         znorm = c_hacapk_dotp_d(*nd, zakt, zt ); 
         zden = c_hacapk_dotp_d( *nd, zakt, zakt );
@@ -468,7 +491,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     // MPI buffer
     double *buffer = NULL;
     int *disps = NULL;
-    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps);
+    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps, queue);
 
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_(nd, st_leafmtxp);
@@ -478,6 +501,7 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     time_batch = 0.0;
     time_set = 0.0;
     time_copy = 0.0;
+    magma_queue_sync( queue );
     MPI_Barrier( icomm );
     st_measure_time = MPI_Wtime();
     // copy the input vector to GPU
@@ -639,7 +663,13 @@ void c_hacapk_bicgstab_cax_lfmtx_gpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HACA
     magma_free(zshdw);
 
     // free cpu memory
-    if (buffer != NULL) free(buffer);
+    if (buffer != NULL) {
+        #if defined(USE_GDR)
+        magma_free(buffer);
+        #else
+        free(buffer);
+        #endif
+    }
     free(disps);
     //free(wws_cpu);
     //free(wwr_cpu);
@@ -731,7 +761,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     // MPI buffer
     double *buffer = NULL;
     int *disps = NULL;
-    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps);
+    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps, NULL);
 
     // copy matrix to GPU
     c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(nd, st_leafmtxp, queue);
@@ -1055,7 +1085,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu2_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     // MPI buffer
     double *buffer = NULL;
     int *disps = NULL;
-    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps);
+    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps, NULL);
 
     #ifdef WARMUP_MPI
     c_hacapk_adot_cax_lfmtx_warmup(st_ctl, zau_cpu, wws_cpu, wwr_cpu, *nd);
@@ -1589,7 +1619,7 @@ void c_hacapk_bicgstab_cax_lfmtx_mgpu3_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HA
     // MPI buffer
     double *buffer = NULL;
     int *disps = NULL;
-    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps);
+    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps, NULL);
 
     #ifdef WARMUP_MPI
     c_hacapk_adot_cax_lfmtx_warmup(st_ctl, zau_cpu, wws_cpu, wwr_cpu, *nd);
@@ -2324,7 +2354,7 @@ void c_hacapk_bicgstab_cax_lfmtx_pipe_(stc_HACApK_leafmtxp *st_leafmtxp, stc_HAC
     // MPI buffer
     double *buffer = NULL;
     int *disps = NULL;
-    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps);
+    c_hacapk_adot_cax_lfmtx_comm_setup(st_ctl, &buffer, &disps, NULL);
 
     MPI_Barrier( icomm );
     #ifdef WARMUP_MPI
