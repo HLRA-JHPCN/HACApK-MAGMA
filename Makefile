@@ -89,9 +89,9 @@ OBJS = HACApK_MAGMA.o HACApK_MGPU.o HACApK_BATCH.o HACApK_BATCH_SORT.o HACApK_SO
 
 
 # MAGMA
-CUDA_DIR  = /usr/apps.sp3/cuda/7.5
-MAGMA_DIR = /home/usr2/16IH0462/magma/release/magma-2.2.0
-MPI_DIR   = /usr/apps.sp3/isv/intel/ParallelStudioXE/ClusterEdition/2016-Update3/compilers_and_libraries_2016.3.210/linux/mpi/intel64
+CUDA_DIR  = /lustre/app/acc/cuda/8.0.44
+MAGMA_DIR = /lustre/jh160041/g27001/magma-2.2.0
+MPI_DIR   = /lustre/app/intel/compilers_and_libraries_2018.1.163/linux/mpi/intel64
 
 INCS+= -I$(CUDA_DIR)/include -I$(MAGMA_DIR)/include -I$(MPI_DIR)/include
 

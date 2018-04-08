@@ -305,8 +305,6 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  st_ctl%param(61)=1         ! ACA norm 1:MREM  2:test 3:norm
  st_ctl%param(62)=7         ! ACA : predictive average of k
  st_ctl%param(63)=1000;     ! ACA : k-max of R_k-matrix 30
-! st_ctl%param(63)=1;        ! ACA : k-max of R_k-matrix 30
-! WRITE(*,*) 'k-max set to be',st_ctl%param(63)
  st_ctl%param(64)=1;        ! ACA : minimun kt
  st_ctl%param(72)=1.0e-3;   ! ACA_EPS
  st_ctl%param(83)=500;      ! solver : maximum iterative number
@@ -333,6 +331,17 @@ integer function HACApK_init(nd,st_ctl,st_bemv,icomma)
  if(ierr.ne.0) then
     print*, 'Error: MPI_Comm_rank failed !!!'
  endif
+! st_ctl%param(63)=1;        ! ACA : k-max of R_k-matrix 30
+! if(irank.eq.0) then
+!    WRITE(*,*)
+!    WRITE(*,*) 'k-max set to be',st_ctl%param(63)
+!    WRITE(*,*)
+! endif
+!
+! st_ctl%param(21)=30;       ! cluster : leaf size 15
+! if(irank.eq.0) then
+!    WRITE(*,*) 'leaf size set to be',st_ctl%param(21)
+! endif
  allocate(st_ctl%lpmd(30)); st_ctl%lpmd(:)=0
  st_ctl%lpmd(1)=icomm; st_ctl%lpmd(2)=nrank; st_ctl%lpmd(3)=irank; st_ctl%lpmd(4)=20
  !

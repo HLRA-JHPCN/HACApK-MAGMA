@@ -110,6 +110,9 @@ void c_hacapk_adot_body_lfcpy_batch_sorted_mgpu_(int *nd, stc_HACApK_leafmtxp *s
         } else {
             printf( "  > batched GEMV with Non Transposes\n" );
         }
+        if (batch_pad != 32) {
+            printf( " !! using padding of %d !!\n",batch_pad );
+        }
     }
     fflush(stdout);
 
@@ -952,7 +955,8 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
                                           double **dBuffer, magma_event_t *event,
                                           double *time_batch, double *time_set, double *time_copy,
                                           double *time_set1, double *time_set2, double *time_set3,
-                                          int on_gpu, magma_queue_t *queue) {
+                                          int on_gpu, magma_queue_t *queue,
+                                          magma_queue_t **queue_hcmv, magma_event_t **event_hcmv) {
     // constants
     double zero = 0.0;
     int gpu_id = (gpus_per_proc*get_device_id(st_leafmtxp))%gpus_per_node;
@@ -1020,8 +1024,10 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
                               st_leafmtxp->zau_mgpu[d], st_leafmtxp->m, queue[d] );
         }
         // first part of low-rank, zbu := V'*zu
-        magmablas_dlaset( MagmaFull, st_leafmtxp->total_size_y_mgpu[d], 1, zero, zero,
-                          st_leafmtxp->zbu_mgpu[d], st_leafmtxp->total_size_y_mgpu[d], queue[d] );
+        if (st_leafmtxp->total_size_y_mgpu[d] > 0) {
+            magmablas_dlaset( MagmaFull, st_leafmtxp->total_size_y_mgpu[d], 1, zero, zero,
+                              st_leafmtxp->zbu_mgpu[d], st_leafmtxp->total_size_y_mgpu[d], queue[d] );
+        }
     }
     #if defined(PROF_SETGET) & defined(PROF_MAGMA_BATCH)
     for (d=0; d<gpus_per_proc; d++) {
@@ -1052,6 +1058,16 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
     fflush(stdout);
 
     // !! Start Matrix-vector Multiply !! 
+    if (queue_hcmv != NULL){
+        for (d=0; d<gpus_per_proc; d++) {
+            int i;
+            magma_event_record( event_hcmv[d][num_queues], queue[d] );
+            for (i=0; i<num_queues; i++) {
+                magma_queue_wait_event( queue_hcmv[d][i], event_hcmv[d][num_queues] );
+            }
+        }
+    }
+    int queue_id = 0;
     for (ip = 0; ip < max(st_leafmtxp->num_batch, nlf) || num_saved > 0;) {
         /**/
         int ip_start = ip;
@@ -1060,15 +1076,42 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
             int batchCount = 0;
             magma_setdevice(gpu_id+d);
             // call batched GEMV and non-blocking copy to CPU
-            c_hacapk_adot_body_lfmtx_mgpu_dgemv(d, ip_start, 
-                                                st_leafmtxp, saved_ip,
-                                                &ip_d[d], num_start, count,
-                                                &batchCount, &num_saved,
-                                                queue[d]);
+            if (queue_hcmv != NULL){
+                c_hacapk_adot_body_lfmtx_mgpu_dgemv(d, ip_start, 
+                                                    st_leafmtxp, saved_ip,
+                                                    &ip_d[d], num_start, count,
+                                                    &batchCount, &num_saved,
+                                                    queue_hcmv[d][queue_id]);
+                queue_id = (queue_id+1)%num_queues;
+            } else {
+                c_hacapk_adot_body_lfmtx_mgpu_dgemv(d, ip_start, 
+                                                    st_leafmtxp, saved_ip,
+                                                    &ip_d[d], num_start, count,
+                                                    &batchCount, &num_saved,
+                                                    queue[d]);
+            }
             num_batch[d] += (1+ batchCount);
             ip += batchCount;
+            if ((num_batch[d]-count) == st_leafmtxp->nlf_mgpu[d] && queue_hcmv != NULL) {
+                int i, j;
+                for (i=0; i<num_queues; i++) {
+                    magma_event_record( event_hcmv[d][i], queue_hcmv[d][i] );
+                    for (j=0; j<num_queues; j++) {
+                        magma_queue_wait_event( queue_hcmv[d][j], event_hcmv[d][i] );
+                    }
+                }
+            }
         }
         count ++;
+    }
+    if (queue_hcmv != NULL){
+        for (d=0; d<gpus_per_proc; d++) {
+            int i;
+            for (i=0; i<num_queues; i++) {
+                magma_event_record( event_hcmv[d][i], queue_hcmv[d][i] );
+                magma_queue_wait_event( queue[d], event_hcmv[d][i] );
+            }
+        }
     }
     // !! Done Matrix-vector Multiply !! 
     //free(num_batch);
@@ -1109,8 +1152,8 @@ void c_hacapk_adot_body_lfmtx_batch_mgpu2(int flag, double *zau,
                              cudaMemcpyDeviceToDevice,
                              magma_queue_get_cuda_stream( queue[d] ) );
             #else
-            cudaMemcpyPeerAsync( dBuffer[d], gpu_id, &(st_leafmtxp->zau_mgpu[d][offset]), gpu_id+d, mloc*sizeof(double),
-                                 magma_queue_get_cuda_stream( queue[d] ) );
+            cudaMemcpyPeerAsync( dBuffer[d], gpu_id, &(st_leafmtxp->zau_mgpu[d][offset]), gpu_id+d,
+                                 mloc*sizeof(double), magma_queue_get_cuda_stream( queue[d] ) );
             #endif
             magma_event_record( event[d], queue[d] );
         }

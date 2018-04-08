@@ -46,7 +46,7 @@ int c_hacapk_adot_body_lfmtx_batch_daxpy(stc_HACApK_leafmtxp *st_leafmtxp, int *
 
 void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_leafmtxp, double *zu, double *zbu,
                                           double *time_batch, double *time_set, double *time_copy, int on_gpu,
-                                          magma_queue_t queue) {
+                                          magma_queue_t queue, magma_queue_t *queue_hcmv, magma_event_t *event_hcmv) {
     // constants
     double zero = 0.0;
 
@@ -120,6 +120,7 @@ void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_l
         tic = MPI_Wtime();
         #endif
         #endif
+        int queue_id = 0;
         fflush(stdout);
         for (ip = 0; ip < max(st_leafmtxp->num_batch, nlf) || num_saved > 0;) {
             /**/
@@ -133,10 +134,18 @@ void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_l
             magma_queue_sync( queue );
             double time_start = MPI_Wtime();
             #endif
-            c_hacapk_adot_body_lfmtx_batch_dgemv(st_leafmtxp, saved_ip,
-                                                 &ip, num_start, count,
-                                                 &batchCount, &num_saved,
-                                                 zau_batch, queue);
+            if (queue_hcmv != NULL) {
+                c_hacapk_adot_body_lfmtx_batch_dgemv(st_leafmtxp, saved_ip,
+                                                     &ip, num_start, count,
+                                                     &batchCount, &num_saved,
+                                                     zau_batch, queue_hcmv[queue_id]);
+                queue_id = (1+queue_id)%num_queues;
+            } else {
+                c_hacapk_adot_body_lfmtx_batch_dgemv(st_leafmtxp, saved_ip,
+                                                     &ip, num_start, count,
+                                                     &batchCount, &num_saved,
+                                                     zau_batch, queue);
+            }
             #ifdef PROF_MAGMA_BATCH_COUNT_2
             magma_queue_sync( queue );
             if (st_leafmtxp->mpi_rank == 0) {
@@ -188,6 +197,13 @@ void c_hacapk_adot_body_lfmtx_batch_queue(double *zau, stc_HACApK_leafmtxp *st_l
                 }
                 num_batch += st_leafmtxp->num_streamed_t;
                 ip += st_leafmtxp->num_streamed_t;
+            }
+        }
+        if (queue_hcmv != NULL) {
+            int i;
+            for (i=0; i<num_queues; i++) {
+                magma_event_record( event_hcmv[i], queue_hcmv[i] );
+                magma_queue_wait_event( queue, event_hcmv[i] );
             }
         }
         // stop timer
@@ -249,7 +265,7 @@ void c_hacapk_adot_body_lfmtx_batch_(double *zau, stc_HACApK_leafmtxp *st_leafmt
     int on_gpu = 0;
     c_hacapk_adot_body_lfmtx_batch_queue(zau, st_leafmtxp, zu, zbu,
                                          time_batch, time_set, time_copy,
-                                         on_gpu, queue);
+                                         on_gpu, queue, NULL, NULL);
     magma_queue_sync( queue );
     magma_queue_destroy( queue );
 }

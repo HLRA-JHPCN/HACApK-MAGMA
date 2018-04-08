@@ -346,9 +346,10 @@ contains
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
        ! redandantly perform local vectors on each GPU
-       !call c_HACApK_bicgstab_cax_lfmtx_mgpu2(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+       call c_HACApK_bicgstab_cax_lfmtx_mgpu1(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
        ! distribute local vectors among local GPUs
-       call c_HACApK_bicgstab_cax_lfmtx_mgpu3(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+       !call c_HACApK_bicgstab_cax_lfmtx_mgpu2(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
+       !call c_HACApK_bicgstab_cax_lfmtx_mgpu3(st_leafmtxp,st_ctl,u,b,param,nd,nstp,lrtrn)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
@@ -365,6 +366,7 @@ contains
 ! allocate/copy to GPU, if have not done it.
      call c_HACApK_adot_body_lfcpy_batch_sorted(nd,st_leafmtxp)
 #endif
+#if defined(CHECK_ALL_SINGLE_GPU)
 ! SpMV on GPU
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
@@ -403,15 +405,17 @@ contains
        write(6,2000) ' time_c_HACApK SpMV on GPU =',time_bicgstab
        write(6,*) 
      endif
+#endif
 
 #if defined(PIPE_BICG)
 ! C version, pipeline on one GPU / proc
      u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
-!       call c_HACApK_bicgstab_cax_lfmtx_gpu(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
-       call c_HACApK_bicgstab_cax_lfmtx_pipe(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
-     write(*,*) mpinr,'done pipe'
+       ! original
+       !call c_HACApK_bicgstab_cax_lfmtx_pipe(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+       ! overlap allgatherv with ddot
+       call c_HACApK_bicgstab_cax_lfmtx_pipe2(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
@@ -437,6 +441,7 @@ contains
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
        call c_HACApK_bicgstab_cax_lfmtx_gpu(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+       !call c_HACApK_gmres_cax_lfmtx_gpu(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
