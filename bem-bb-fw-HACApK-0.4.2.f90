@@ -46,7 +46,7 @@ program ppohBEM_bem_bb_dense_mpi
   use m_ppohBEM_bembb2hacapk
   implicit none
   include 'mpif.h'
-  integer   irank, nrank
+  integer   irank, grank, nrank
   integer   comm, ierr
   integer   iunit
 
@@ -79,13 +79,14 @@ program ppohBEM_bem_bb_dense_mpi
   integer  act_nrank
 
   integer  i
+  integer  provided
   integer, dimension(:), allocatable :: act_nranks
   integer  MPI_GROUP_WORLD, act_grp
   integer  act_comm
   
 !For HACApK
-  character*32 value
-  character*32 logfile
+  character*320 value
+  character*320 logfile
   real*8 ztol
 
   integer number,nlength,nstatus,nargs,il,it,nd,lrtrn
@@ -93,21 +94,63 @@ program ppohBEM_bem_bb_dense_mpi
   type(st_HACApK_lcontrol) :: st_ctl
   logical ldense
 
+#ifdef USE_SUBCOMM
+ integer my_rank(1)  ! MPI_Comm
+ integer my_comm     ! MPI_Comm
+ integer world_group ! MPI_Group
+ integer my_group    ! MPI_Group
+#endif
+
   ldense=.false.
 !  ldense=.true.
 
-  comm = MPI_COMM_WORLD; ierr = 0
+! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! !
+! let me initialize MPI so that we can create sub-communicator !
+  ierr = 0
+#ifdef USE_MPI_INIT_THREAD
+  call MPI_Init_thread ( MPI_THREAD_MULTIPLE, provided, ierr )
+#else
+  call MPI_Init ( ierr )
+#endif
+  if( ierr .ne. 0 ) then
+    print*, 'Error: MPI_Init failed !!!'
+  endif
+! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! !
 
-  call Initialization_MPI( comm, nrank, irank, ierr )
-
+  call MPI_Comm_rank ( MPI_COMM_WORLD, grank, ierr )
+#ifdef USE_MPI_INIT_THREAD
+  if (provided .ne. MPI_THREAD_MULTIPLE .and. grank .eq. 0) then
+    select case(provided) 
+      case (MPI_THREAD_SINGLE)     
+        write(*,*) " ** Only provided SINGLE **" 
+      case (MPI_THREAD_FUNNELED) 
+        write(*,*) " ** Only provided FUNNELED **"
+      case (MPI_THREAD_SERIALIZED)
+        write(*,*) " ** Only provided SERIALIZED **"
+      case default
+        write(*,*) " ** Unknown provided **"
+    end select
+  endif 
+#endif
+!
+#ifdef USE_SUBCOMM
+  my_rank(1) = grank
+  call MPI_Comm_group(MPI_COMM_WORLD, world_group, ierr);
+  call MPI_Group_incl(world_group, 1, my_rank, my_group, ierr);
+  call MPI_Comm_create(MPI_COMM_WORLD, my_group, comm, ierr);
+  call MPI_Group_free(world_group, ierr);
+  call MPI_Group_free(my_group, ierr);
+#else
+  comm = MPI_COMM_WORLD;
+#endif
+  call Initialization_MPI( comm, nrank, irank, grank, ierr )
   if( ierr .ne. 0 ) then
     print*, 'Error: MPI_Init failed'
     goto 1000
   endif
 
-
   call Read_bem_bb_config( ppohBEM_number_element_dof, ppohBEM_linear_solver, &
-                           ppohBEM_tor, ppohBEM_max_steps, irank, comm, ierr )
+                           ppohBEM_tor, ppohBEM_max_steps, irank, grank, comm, ierr )
 
   if( ierr .ne. 0 ) then
     print*, 'Error: in reading bem_bb_config.txt'
@@ -140,7 +183,7 @@ program ppohBEM_bem_bb_dense_mpi
                         ppohBEM_nint_para_fc, ppohBEM_ndble_para_fc, &
                         st_ppohBEM_np, ppohBEM_face2node, &
                         ppohBEM_int_para_fc, ppohBEM_dble_para_fc, iunit, &
-                        irank, comm, ierr )
+                        irank, grank, comm, ierr )
 
   call MPI_Barrier( comm, ierr )
   if(ierr.ne.0) then
@@ -157,7 +200,7 @@ program ppohBEM_bem_bb_dense_mpi
                            st_ppohBEM_np, ppohBEM_face2node, &
                            ppohBEM_int_para_fc, ppohBEM_dble_para_fc, &
                            ndim, ppohBEM_a, ppohBEM_rhs, ppohBEM_sol, &
-                           ext_ndim, lhp, ltp, proc_dim, irank, nrank, &
+                           ext_ndim, lhp, ltp, proc_dim, grank, irank, nrank, &
                            act_nrank,ldense, ierr )
 
 
@@ -248,16 +291,19 @@ endif
   time3 = st21-st3
   time4 = st4-st1
 
-  if ( irank .eq. 0 ) then
-    print*,'before HACApK time = ',sngl(time1),' [sec]'
-    print*,'       HACApK time = ',sngl(time3),' [sec]'
-    print*,'_____________all time = ',sngl(time4),' [sec]'
-  endif
+!  if ( irank .eq. 0 ) then
+!    print*,'before HACApK time = ',sngl(time1),' [sec]'
+!    print*,'       HACApK time = ',sngl(time3),' [sec]'
+!    print*,'_____________all time = ',sngl(time4),' [sec]'
+!  endif
 
 
 
 1000  continue
 
+#ifdef USE_SUBCOMM
+  call MPI_Comm_free( comm, ierr )
+#endif
   if(allocated(st_ppohBEM_np))         deallocate(st_ppohBEM_np)
   if(allocated(ppohBEM_face2node))     deallocate(ppohBEM_face2node)
   if(allocated(ppohBEM_int_para_fc))   deallocate(ppohBEM_int_para_fc)
@@ -280,16 +326,12 @@ contains
   !!!!!!!!!!!!!!!!!!!!!!!!!!    Initialization_MPI    !!!!!!!!!!!!!!!!!!!!!!!!!
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !***Initialization_MPI
-  subroutine Initialization_MPI( comm, nrank, irank, ierr )
+  subroutine Initialization_MPI( comm, nrank, irank, grank, ierr )
     integer, intent(out) :: irank
+    integer, intent(in)  :: grank
     integer, intent(out) :: nrank
     integer, intent(in)  :: comm
     integer, intent(out) :: ierr
-
-    call MPI_Init ( ierr )
-    if( ierr .ne. 0 ) then
-      print*, 'Error: MPI_Init failed !!!'
-    endif
 
     call MPI_Comm_size ( comm, nrank, ierr )
     if( ierr .ne. 0 ) then
@@ -301,7 +343,7 @@ contains
       print*, 'Error: MPI_Comm_rank failed !!!'
     endif
 
-    if (irank.eq.0) then
+    if (grank.eq.0) then
       print*, 'Number of processes ', nrank
     endif
 
@@ -319,13 +361,14 @@ contains
 !***Read_bem_bb_config
   subroutine Read_bem_bb_config( ppohBEM_number_element_dof, &
                                  ppohBEM_linear_solver, ppohBEM_tor, &
-                                 ppohBEM_max_steps, irank, comm, ierr )
+                                 ppohBEM_max_steps, irank, grank, comm, ierr )
 
     integer,   intent(out) :: ppohBEM_number_element_dof
     character, intent(out) :: ppohBEM_linear_solver*16
     real*8,    intent(out) :: ppohBEM_tor
     integer,   intent(out) :: ppohBEM_max_steps
     integer,   intent(in)  :: irank
+    integer,   intent(in)  :: grank
     integer,   intent(in)  :: comm
     integer,   intent(out) :: ierr
 
@@ -336,7 +379,15 @@ contains
       read( 11, * ) ppohBEM_tor
       read( 11, * ) ppohBEM_max_steps
       close( 11 )
+    endif
+!    ppohBEM_max_steps = 20
+!    if( irank .eq. 0 ) then
+!        WRITE(*,*)
+!        WRITE(*,*) 'set max_step 20'
+!        WRITE(*,*)
+!    endif 
 
+    if( grank .eq. 0 ) then
       write(*,*) "Number of unknowns set on each face element = ", &
                   ppohBEM_number_element_dof
       write(*,*) "Selected linear solver = ", ppohBEM_linear_solver
@@ -363,7 +414,7 @@ contains
                               ppohBEM_ndble_para_fc, &
                               st_ppohBEM_np, ppohBEM_face2node, &
                               ppohBEM_int_para_fc, ppohBEM_dble_para_fc, &
-                              iunit, irank, comm, ierr )
+                              iunit, irank, grank, comm, ierr )
 
     character, intent(in) :: filename*256
     integer,   intent(in)  :: ppohBEM_number_element_dof
@@ -385,6 +436,7 @@ contains
 
     integer, intent(in)  :: iunit
     integer, intent(in)  :: irank
+    integer, intent(in)  :: grank
     integer, intent(in)  :: comm
     integer, intent(out) :: ierr
 
@@ -400,7 +452,7 @@ contains
     if ( irank .eq. 0 ) then
       open( iunit, file=filename, action='read', pad='yes', iostat=ierr )
       if( ierr .ne. 0 ) then
-        print*, 'input.txt does not exists'; stop
+        print*, filename,' does not exists'; stop
       endif
 
     !!!!  Read number of nodes from input data file : ppohBEM_nond  !!!!
@@ -415,6 +467,7 @@ contains
 
     !!!!  Read the coordinates of the nodes from input data file :
     !!!!      st_ppohBEM_np  !!!!
+      if (grank == 0) write(*,*) 'nond',ppohBEM_nond
       do i = 1, ppohBEM_nond
         read( iunit, * ) st_ppohBEM_np(i)%x, st_ppohBEM_np(i)%y, &
                          st_ppohBEM_np(i)%z
@@ -422,11 +475,13 @@ contains
 
     !!!!  Read number of faces from input data file : ppohBEM_nofc  !!!!
       read( iunit, * ) ppohBEM_nofc
+      if (grank == 0) write(*,*) 'ppohBEM_nofc',ppohBEM_nofc
 
     !!!!  Read number of nodes on each face from input data file : 
     !!!!       ppohBEM_nond_on_face  !!!!
 
       read( iunit, * ) ppohBEM_nond_on_face
+      if (grank == 0) write(*,*) 'ppohBEM_nond_on_face',ppohBEM_nond_on_face
 
     !!!!  Read number of integer parameters set on each face from input data
     !!!!    file : ppohBEM_nint_para_fc  !!!!
@@ -597,7 +652,7 @@ contains
                                  st_ppohBEM_np, ppohBEM_face2node, &
                                  ppohBEM_int_para_fc, ppohBEM_dble_para_fc, &
                                  ndim, ppohBEM_a, ppohBEM_rhs, ppohBEM_sol, &
-                                 ext_ndim, lhp, ltp, proc_dim, irank, nrank, &
+                                 ext_ndim, lhp, ltp, proc_dim, grank, irank, nrank, &
                                  act_nrank,ldense, ierr )
   use m_ppohBEM_bembb2hacapk
 
@@ -623,6 +678,7 @@ contains
     integer, intent(out) :: lhp, ltp
     integer, intent(out) :: proc_dim
     integer, intent(in)  :: irank
+    integer, intent(in)  :: grank
     integer, intent(in)  :: nrank
     integer, intent(out) :: act_nrank
     integer, intent(out) :: ierr
@@ -659,15 +715,12 @@ contains
     allocate( ppohBEM_rhs(ext_ndim), stat = ierr )
     allocate( ppohBEM_sol(ext_ndim), stat = ierr )
 
+!    ith = omp_get_thread_num()
+!    nth = omp_get_num_threads()
+    ith = 0
+    nth = 1
 
-!!!!!!!!!!!! Thread parallelization starts !!!!!!!!!!!!
-!$omp parallel private(thr_dim, thr_dim1, ith, nth, mth, j_st, j_en, i, j)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    ith = omp_get_thread_num()
-    nth = omp_get_num_threads()
-
-    if ( ith.eq.0 .and. irank.eq.0 ) then
+    if ( ith.eq.0 .and. grank.eq.0 ) then
       print*, 'Number of total threads, Thread number ', nth, ith
       print*, 'ext_ndim = ', ext_ndim, ', ndim = ', ndim
     endif
@@ -692,13 +745,11 @@ contains
     endif
 
   if(ldense)then
-  !$omp do private(j) schedule(static)
     do i = lhp, ltp
       do j = 1, ext_ndim
         ppohBEM_a(j,i) = 0.0d0
       enddo
     enddo
-  !$omp end do
   endif
     if( ltp .gt. ndim ) then
       ltp = ndim
@@ -732,12 +783,6 @@ contains
 
       ppohBEM_sol(j) = 0.0d0
     enddo
-
-!!!!!!!!!!!!!!!!!!
-!$omp end parallel
-!!!!!!!!!!!!!!!!!!
-!    print*,'sub Make_equation_data end'
-
   end subroutine   !!!! subroutine Make_equation_data
 
 
@@ -866,12 +911,10 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!$omp parallel &
-!$omp private(step,i,j,alpha,beta,zeta,nom,den,nomold,rnorm,bnorm,thr_dim,thr_dim1,ith,nth,inth,mth,j_st,j_en,i_st,i_en)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  ith = omp_get_thread_num()
-  nth = omp_get_num_threads()
+!  ith = omp_get_thread_num()
+!  nth = omp_get_num_threads()
+  ith = 0
+  nth = 1
 
   thr_dim  = ndim / nth
   mth = ndim - thr_dim * nth
@@ -943,23 +986,17 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
 
 
 
-!$omp master
   allocate( asum(nth+nth), stat=ierr )
   asum(1) = 0.0d0
-!$omp end master
   if( ierr .ne. 0 ) then
     print*, 'Memory allocation #103 failed !!!'
     goto 990
   endif
-!$omp barrier
 
   call residual_direct( i_st, i_en, ndim, ext_ndim, lhp, ltp, a, sol, rhs, r )
 
-!$omp master
   call MPI_Allgather ( MPI_IN_PLACE, proc_dim, MPI_DOUBLE_PRECISION, &
                        r, proc_dim, MPI_DOUBLE_PRECISION, act_comm, ierr )
-!$omp end master
-!$omp barrier
 
 
 !!!! Set shadow vector !!!!
@@ -968,36 +1005,26 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
   enddo
 
 
-!$omp barrier
   call dot_product( i_st, i_en, ext_ndim, rhs, rhs, asum(ith) )
   call dot_product( i_st, i_en, ext_ndim, r, r, asum(inth) )
   asum1 = 0.0
   asum2 = 0.0
-!$omp barrier
-!$omp do reduction(+:asum1, asum2) schedule(static,1)
   do i = 1, nth
     asum1 = asum1 + asum(i)
     asum2 = asum2 + asum(i+nth)
   enddo
-!$omp barrier
-!$omp master
   asum(1) = asum1
   asum(2) = asum2
   call MPI_Allreduce( MPI_IN_PLACE, asum, 2, MPI_DOUBLE_PRECISION, MPI_SUM, &
                       act_comm, ierr )
-!$omp end master
-!$omp barrier
   bnorm = sqrt( asum(1) )
   rnorm = sqrt( asum(2) )
   asum1 = 0.0
   asum2 = 0.0
-!$omp barrier
 
 
   if( irank .eq. 0 ) then
-!$omp master
     write(*,1010) 'Original relative residual norm =', rnorm/bnorm
-!$omp end master
   endif
 
   if ( rnorm .lt. ppohBEM_tor*bnorm ) then
@@ -1014,35 +1041,23 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
     do j = j_st, j_en
       kp(j) = p(j)
     enddo
-  !$omp barrier
     call matvec_direct( i_st, i_en, ndim, ext_ndim, lhp, ltp, a, kp, akp )
-  !$omp barrier
-  !$omp master
     call MPI_Allgather( MPI_IN_PLACE, proc_dim, MPI_DOUBLE_PRECISION, &
                         akp, proc_dim, MPI_DOUBLE_PRECISION, act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     call dot_product( i_st, i_en, ext_ndim, shdw, r, asum(ith) )
     call dot_product( i_st, i_en, ext_ndim, shdw, akp, asum(inth) )
-  !$omp barrier
-  !$omp do reduction(+:asum1, asum2) schedule(static,1)
     do i = 1, nth
       asum1 = asum1 + asum(i)
       asum2 = asum2 + asum(i+nth)
     enddo
-  !$omp barrier
-  !$omp master
     asum(1) = asum1
     asum(2) = asum2
     call MPI_Allreduce( MPI_IN_PLACE, asum, 2, MPI_DOUBLE_PRECISION, &
                         MPI_SUM, act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     nom = asum(1)
     den = asum(2)
     asum1 = 0.0
     asum2 = 0.0
-  !$omp barrier
     alpha  = nom / den
     nomold = nom
 
@@ -1055,35 +1070,23 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
       kt(j) = t(j)
     enddo
 
-  !$omp barrier
     call matvec_direct( i_st, i_en, ndim, ext_ndim, lhp, ltp, a, kt, akt )
-  !$omp barrier
-  !$omp master
     call MPI_Allgather( MPI_IN_PLACE, proc_dim, MPI_DOUBLE_PRECISION, &
                         akt, proc_dim, MPI_DOUBLE_PRECISION, act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     call dot_product( i_st, i_en, ext_ndim, akt, t, asum(ith) )
     call dot_product( i_st, i_en, ext_ndim, akt, akt, asum(inth) )
-  !$omp barrier
-  !$omp do reduction(+:asum1, asum2) schedule(static,1)
     do i = 1, nth
       asum1 = asum1 + asum(i)
       asum2 = asum2 + asum(i+nth)
     enddo
-  !$omp barrier
-  !$omp master
     asum(1) = asum1
     asum(2) = asum2
     call MPI_Allreduce( MPI_IN_PLACE, asum, 2, MPI_DOUBLE_PRECISION, MPI_SUM, &
                         act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     nom = asum(1)
     den = asum(2)
     asum1 = 0.0
     asum2 = 0.0
-  !$omp barrier
     zeta  = nom / den
 
     do j = j_st, j_en
@@ -1093,32 +1096,22 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
       r(j) = t(j) - zeta * akt(j)
     enddo
 
-  !$omp barrier
     call dot_product( i_st, i_en, ext_ndim, shdw, r, asum(ith) )
     call dot_product( i_st, i_en, ext_ndim, r, r, asum(inth) )
-  !$omp barrier
-  !$omp do reduction(+:asum1, asum2) schedule(static,1)
     do i = 1, nth
       asum1 = asum1 + asum(i)
       asum2 = asum2 + asum(i+nth)
     enddo
-  !$omp barrier
-  !$omp master
     asum(1) = asum1
     asum(2) = asum2
     call MPI_Allreduce( MPI_IN_PLACE, asum, 2, MPI_DOUBLE_PRECISION, &
                         MPI_SUM, act_comm, ierr )
-  !$omp end master
-  !$omp barrier
     beta = alpha * asum(1) / ( zeta * nomold )
     rnorm = sqrt( asum(2) )
     asum1 = 0.0
     asum2 = 0.0
-  !$omp barrier
     if( irank .eq. 0 ) then
-  !$omp master
       write(*,1011) 'Step', step, ' relative residual =', rnorm/bnorm
-  !$omp end master
     endif
     if( rnorm .lt. ppohBEM_tor*bnorm ) then
       exit   !!! end iteration
@@ -1129,42 +1122,29 @@ integer function ppohBEM_pbicgstab_dense( irank, nrank, lhp, ltp, proc_dim, &
 
   call residual_direct( i_st, i_en, ndim, ext_ndim, lhp, ltp, a, sol, rhs, r )
 
-!$omp master
   call MPI_Allgather ( MPI_IN_PLACE, proc_dim, MPI_DOUBLE_PRECISION, &
                        r, proc_dim, MPI_DOUBLE_PRECISION, act_comm, ierr )
-!$omp end master
-!$omp barrier
 
   call dot_product( i_st, i_en, ext_ndim, r, r, asum(ith) )
 
-!$omp barrier
-!$omp do reduction(+:asum1) schedule(static,1)
   do i = 1, nth
     asum1 = asum1 + asum(i)
   enddo
-!$omp barrier
-!$omp master
   asum(1) = asum1
   call MPI_Allreduce( MPI_IN_PLACE, asum, 1, MPI_DOUBLE_PRECISION, &
                       MPI_SUM, act_comm, ierr )
-!$omp end master
-!$omp barrier
   rnorm = sqrt( asum(1) )
-!$omp barrier
 
     if( irank .eq. 0 ) then
-!$omp master
       write(*,*) ' '
       write(*,1010) 'Relative residual norm = ', rnorm/bnorm
       write(*,*) ' '
       write(*,*) ' '
-!$omp end master
     endif
     nsteps = step
 
 990  continue
 
-!$omp end parallel
 
 1000 continue
   if(allocated(r))    deallocate(r)

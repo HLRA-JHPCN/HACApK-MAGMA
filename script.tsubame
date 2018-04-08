@@ -1,13 +1,35 @@
 #!/bin/sh
 #
-# ran it with:
-# t2sub -q S -W group_list=t2g-jh160041 -l select=2:mpiprocs=3:mem=16gb -l walltime=00:20:00 -l place=scatter ./script
 #
-cd /home/usr2/16IH0462/github/HLRA-JHPCN/HACApK-FPGA
+cd /home/usr2/16IH0462/github/HLRA-JHPCN/forks/HACApK-MAGMA
 source env.tsubame 
 
-#mpirun -np 1 -npernode 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../bem_bb_inputs/input_216h.pbf >& out.p1
-#mpirun -np 3 -npernode 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../bem_bb_inputs/input_216h.pbf >& out.p3
-mpirun -np 6 -npernode 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../bem_bb_inputs/input_216h.pbf >& out.p6
-#mpirun -np 6 -npernode 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../bem_bb_inputs/input_1ts.pbs >& out.p6
+# 1GPU / proc
+# t2sub -q S -W group_list=t2g-jh160041 -l select=1:mpiprocs=3:mem=16gb -l walltime=00:20:00 -l place=scatter ./script
+#mpirun -n 1 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p1
+#mpirun -n 3 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p3
+#mpirun -n 6 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p6
+#mpirun -n 9 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p9
+#mpirun -n 12 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p12
+#mpirun -n 15 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p15
+
+#mpirun -n 3  -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_288ts.pbf  >& out.p3.288
+#mpirun -n 9  -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_288ts.pbf  >& out.p9.288
+#mpirun -n 12 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_288ts.pbf  >& out.p12.288
+#mpirun -n 15 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_288ts.pbf  >& out.p15.288
+#mpirun -n 15 -ppn 3 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_1ms.pbf  >& out.p15.1m
+
+# 3GPUs / proc
+# t2sub -q S -W group_list=t2g-jh160041 -l select=5:mpiprocs=1:mem=16gb -l walltime=00:30:00 -l place=scatter ./script.tsubame
+#mpirun -n 1 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p1
+#mpirun -n 2 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p2
+mpirun -n 3 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p3
+#mpirun -n 4 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p4
+#mpirun -n 5 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_100ts.pbf  >& out.p5
+
+#mpirun -n 3 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_1ms.pbf  >& out.p3.1m
+#mpirun -n 4 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_1ms.pbf  >& out.p4.1m
+
+#mpirun -n 5 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_288ts.pbf  >& out.p5.288
+#mpirun -n 5 -ppn 1 -hostfile $PBS_NODEFILE ./bem-bb-SCM.out ../../bem_bb_inputs/input_1ms.pbf  >& out.p5.1m
 
