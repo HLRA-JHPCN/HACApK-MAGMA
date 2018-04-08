@@ -148,6 +148,9 @@ typedef struct stc_HACApK_lcontrol {
 //#define num_queues 3
 //#define BY_GROUP
 
+// use DGEMV to merge pairs of DDOT, but slow
+//#define DDOT_BY_DGEMV
+
 #define TSUBAME
 //#define REEDBUSH
 #if defined(TSUBAME)
