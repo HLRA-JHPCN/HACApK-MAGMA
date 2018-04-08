@@ -416,7 +416,6 @@ contains
        !call c_HACApK_bicgstab_cax_lfmtx_pipe(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
        ! overlap allgatherv with ddot
        call c_HACApK_bicgstab_cax_lfmtx_pipe2(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
-     write(*,*) mpinr,'done pipe'
      call MPI_Barrier( icomm, ierr )
      en_measure_time_bicgstab=MPI_Wtime()
      time_bicgstab = en_measure_time_bicgstab - st_measure_time_bicgstab
