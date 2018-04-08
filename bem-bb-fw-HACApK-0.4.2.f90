@@ -79,6 +79,7 @@ program ppohBEM_bem_bb_dense_mpi
   integer  act_nrank
 
   integer  i
+  integer  provided
   integer, dimension(:), allocatable :: act_nranks
   integer  MPI_GROUP_WORLD, act_grp
   integer  act_comm
@@ -106,15 +107,32 @@ program ppohBEM_bem_bb_dense_mpi
 ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! !
 ! let me initialize MPI so that we can create sub-communicator !
   ierr = 0
+#ifdef USE_MPI_INIT_THREAD
+  call MPI_Init_thread ( MPI_THREAD_MULTIPLE, provided, ierr )
+#else
   call MPI_Init ( ierr )
-  !integer :: provided
-  !call MPI_Init_thread ( MPI_THREAD_MULTIPLE, provided, ierr )
+#endif
   if( ierr .ne. 0 ) then
     print*, 'Error: MPI_Init failed !!!'
   endif
 ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! !
 
   call MPI_Comm_rank ( MPI_COMM_WORLD, grank, ierr )
+#ifdef USE_MPI_INIT_THREAD
+  if (provided .ne. MPI_THREAD_MULTIPLE .and. grank .eq. 0) then
+    select case(provided) 
+      case (MPI_THREAD_SINGLE)     
+        write(*,*) " ** Only provided SINGLE **" 
+      case (MPI_THREAD_FUNNELED) 
+        write(*,*) " ** Only provided FUNNELED **"
+      case (MPI_THREAD_SERIALIZED)
+        write(*,*) " ** Only provided SERIALIZED **"
+      case default
+        write(*,*) " ** Unknown provided **"
+    end select
+  endif 
+#endif
+!
 #ifdef USE_SUBCOMM
   my_rank(1) = grank
   call MPI_Comm_group(MPI_COMM_WORLD, world_group, ierr);
