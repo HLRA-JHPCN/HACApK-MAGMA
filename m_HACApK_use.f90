@@ -423,6 +423,17 @@ contains
 #else
 ! C version, all on GPU
      u_copy(:nd) = u(:nd)
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+       write(6,2000) ' ******* warm up start ******'
+     end if
+     call MPI_Barrier( icomm, ierr )
+       call c_HACApK_bicgstab_cax_lfmtx_gpu(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
+     call MPI_Barrier( icomm, ierr )
+     if(st_ctl%param(1)>0 .and. mpinr==0) then
+       write(6,2000) ' ******* warm up done ******'
+     end if
+!
+     u_copy(:nd) = u(:nd)
      call MPI_Barrier( icomm, ierr )
      st_measure_time_bicgstab=MPI_Wtime()
        call c_HACApK_bicgstab_cax_lfmtx_gpu(st_leafmtxp,st_ctl,u_copy,b,param,nd,nstp,lrtrn)
